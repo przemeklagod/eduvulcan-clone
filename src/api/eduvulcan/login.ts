@@ -70,69 +70,48 @@ async function fetchLoginPage(): Promise<{ csrfToken: string; captcha: { challen
   return { csrfToken, captcha };
 }
 
-function snippetAround(text: string, needle: RegExp, radius: number): string {
-  const match = text.match(needle);
-  if (!match || match.index === undefined) return text.slice(0, radius * 2);
-  const start = Math.max(0, match.index - radius);
-  return text.slice(start, match.index + radius);
+interface SubmitLoginResult {
+  status: number;
 }
 
-async function submitLogin(
-  username: string,
-  password: string,
-  csrfToken: string,
-  captchaResponse: string,
-  diagnostics: { showCaptcha: boolean; hadCaptchaParams: boolean }
-): Promise<void> {
+async function submitLogin(username: string, password: string, csrfToken: string, captchaResponse: string): Promise<SubmitLoginResult> {
   const body =
     `UserName=${encodeURIComponent(username)}` +
     `&Password=${encodeURIComponent(password)}` +
     `&captcha-response=${encodeURIComponent(captchaResponse)}` +
     `&__RequestVerificationToken=${encodeURIComponent(csrfToken)}`;
 
-  // The reference implementation disables redirect-following on this request so it
-  // can inspect the raw pre-redirect response: success = a Location header is
-  // present, failure = the (non-redirected) body contains "robot"/"robak". React
-  // Native's fetch does not honor `redirect: 'manual'` on iOS - it always follows
-  // redirects - so `response.headers.get('location')` is never populated here.
-  // `response.redirected` is still reliably set by the Fetch spec even when the
-  // redirect was auto-followed, so we use that as the success signal instead, and
-  // only inspect body text for the robot/captcha rejection when NOT redirected
-  // (avoids false positives from unrelated pages containing "robots" meta tags).
+  // The reference implementation disables redirect-following so it can read the
+  // Location header directly (present only on a successful login). React Native's
+  // fetch does neither reliably on iOS: `redirect: 'manual'` is ignored, and
+  // `response.redirected` comes back `undefined` rather than a boolean. There is
+  // also no safe way to distinguish "captcha rejected" from an ordinary re-render
+  // of the login page by scanning the body for "robot"/"robak" - the page always
+  // includes `<meta name="robots" content="noindex">`, which false-positives on
+  // every non-redirected response regardless of the real cause. So this function
+  // does not try to interpret the response at all - it only submits the form and
+  // lets the session cookies (if any were set) speak for themselves. The actual
+  // success/failure signal comes from GET /api/ap afterwards, which reports
+  // Success/ErrorMessage explicitly.
   const response = await fetch(`${BASE_URL}/logowanie`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   });
 
-  if (response.redirected) return;
-
-  const bodyText = await response.text().catch(() => '');
-  const diag =
-    `status=${response.status} redirected=${response.redirected} bodyLen=${bodyText.length} ` +
-    `showCaptcha=${diagnostics.showCaptcha} hadCaptchaParams=${diagnostics.hadCaptchaParams} ` +
-    `stillHasCaptchaWrapper=${/captcha-wrapper/i.test(bodyText)}`;
-
-  if (/robot|robak/i.test(bodyText)) {
-    throw new CaptchaRejectedError(
-      `eduVulcan rejected the captcha response. ${diag}\n` +
-        `Snippet: ${snippetAround(bodyText, /robot|robak/i, 200)}`
-    );
-  }
-  throw new InvalidCredentialsError(
-    `eduVulcan login failed: no redirect after POST /logowanie (check username/password). ${diag}\n` +
-      `Snippet: ${bodyText.slice(0, 400)}`
-  );
+  return { status: response.status };
 }
 
-async function fetchApPayload(): Promise<ApResponse> {
+async function fetchApPayload(context: string): Promise<ApResponse> {
   const response = await fetch(`${BASE_URL}/api/ap`);
   const html = await response.text();
 
   const apTag = extractTag(html, /<input[^>]*id="ap"[^>]*>/);
   const rawValue = extractAttr(apTag, 'value');
   if (!rawValue) {
-    throw new InvalidCredentialsError('Login did not succeed: no session data on /api/ap (check username/password)');
+    throw new InvalidCredentialsError(
+      `Login did not succeed: no session data on /api/ap (check username/password). ${context}`
+    );
   }
 
   return JSON.parse(decodeHtmlEntities(rawValue)) as ApResponse;
@@ -153,22 +132,20 @@ export async function loginToEduVulcan(username: string, password: string): Prom
   const captchaResponse =
     showCaptcha && captcha ? solveCaptchaPow(captcha.challenge, captcha.difficulty, captcha.rounds) : '';
 
-  await submitLogin(username, password, csrfToken, captchaResponse, {
-    showCaptcha,
-    hadCaptchaParams: captcha !== null,
-  });
+  const submitResult = await submitLogin(username, password, csrfToken, captchaResponse);
+  const context = `(POST /logowanie status=${submitResult.status}, showCaptcha=${showCaptcha}, hadCaptchaParams=${captcha !== null})`;
 
-  let ap = await fetchApPayload();
+  let ap = await fetchApPayload(context);
   if (!ap.Success) {
-    throw new InvalidCredentialsError(ap.ErrorMessage ?? 'eduVulcan login failed');
+    throw new InvalidCredentialsError(`${ap.ErrorMessage ?? 'eduVulcan login failed'} ${context}`);
   }
   if (!ap.Tokens?.length) {
-    throw new EduVulcanLoginError('Login succeeded but no school tenants were returned');
+    throw new EduVulcanLoginError(`Login succeeded but no school tenants were returned ${context}`);
   }
 
   if (!ap.IsConsentAccepted && ap.CanAcceptConsent) {
     await acceptConsent();
-    ap = await fetchApPayload();
+    ap = await fetchApPayload(context);
   }
 
   return {
