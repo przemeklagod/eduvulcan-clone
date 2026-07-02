@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getGradeAverages, getGrades } from '../api/hebe/endpoints/grades';
+import { getGradeAverages, getGradeSummary, getGrades } from '../api/hebe/endpoints/grades';
+import type { GradeSummary } from '../api/hebe/types/grade';
 import { useActiveCredential } from '../auth/accountsContext';
 
 function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }>): number | undefined {
@@ -11,6 +12,7 @@ export function useGrades() {
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const periodId = student ? findCurrentPeriodId(student.Periods) : undefined;
   const unitId = student?.Unit.Id;
+  const periods = student?.Periods ?? [];
   const enabled = Boolean(activeInfo && student && periodId !== undefined && unitId !== undefined);
 
   const params = enabled ? { unitId: unitId!, pupilId: activeInfo!.pupilId, periodId: periodId! } : null;
@@ -27,12 +29,28 @@ export function useGrades() {
     enabled,
   });
 
+  // Semester/final ("proponowana"/"ustalona") grades live in a separate summary
+  // endpoint, one call per period - not just the current one, so both semester
+  // and end-of-year entries are available even mid-year.
+  const summaryQuery = useQuery({
+    queryKey: ['gradeSummary', activeInfo?.credential.tenant, activeInfo?.pupilId, periods.map((p) => p.Id).join(',')],
+    queryFn: async (): Promise<GradeSummary[]> => {
+      const perPeriod = await Promise.all(
+        periods.map((p) => getGradeSummary(activeInfo!.credential, { unitId: unitId!, pupilId: activeInfo!.pupilId, periodId: p.Id }))
+      );
+      return perPeriod.flat();
+    },
+    enabled: enabled && periods.length > 0,
+  });
+
   return {
     grades: gradesQuery.data ?? [],
     averages: averagesQuery.data ?? [],
+    summaries: summaryQuery.data ?? [],
+    periods,
     isLoading: gradesQuery.isLoading || averagesQuery.isLoading,
     error: gradesQuery.error ?? averagesQuery.error,
-    refetch: () => Promise.all([gradesQuery.refetch(), averagesQuery.refetch()]),
+    refetch: () => Promise.all([gradesQuery.refetch(), averagesQuery.refetch(), summaryQuery.refetch()]),
     isRefetching: gradesQuery.isRefetching || averagesQuery.isRefetching,
     hasActiveStudent: enabled,
   };

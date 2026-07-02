@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { Message } from '@/src/api/hebe/types/message';
 import { useMessages, type MessageFolder } from '@/src/data/useMessages';
+import { useThemeColors } from '@/src/ui/theme';
 import { formatHebeDate } from '@/src/utils/dates';
+import { htmlToPlainText } from '@/src/utils/richText';
 
 const FOLDERS: { key: MessageFolder; label: string }[] = [
   { key: 'received', label: 'Odebrane' },
@@ -11,22 +13,26 @@ const FOLDERS: { key: MessageFolder; label: string }[] = [
 ];
 
 export default function MessagesScreen() {
+  const colors = useThemeColors();
   const [folder, setFolder] = useState<MessageFolder>('received');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { messages, isLoading, isRefetching, error, refetch, hasActiveStudent } = useMessages(folder);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.tabBar}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         {FOLDERS.map((f) => (
-          <Pressable key={f.key} style={[styles.tab, folder === f.key && styles.tabActive]} onPress={() => setFolder(f.key)}>
-            <Text style={[styles.tabLabel, folder === f.key && styles.tabLabelActive]}>{f.label}</Text>
+          <Pressable key={f.key} style={[styles.tab, folder === f.key && { borderBottomWidth: 2, borderBottomColor: colors.accent }]} onPress={() => setFolder(f.key)}>
+            <Text style={[styles.tabLabel, { color: folder === f.key ? colors.accent : colors.secondaryText }, folder === f.key && styles.tabLabelActive]}>
+              {f.label}
+            </Text>
           </Pressable>
         ))}
       </View>
 
       {!hasActiveStudent ? (
         <View style={styles.center}>
-          <Text>Brak zarejestrowanego ucznia.</Text>
+          <Text style={{ color: colors.text }}>Brak zarejestrowanego ucznia.</Text>
         </View>
       ) : isLoading ? (
         <View style={styles.center}>
@@ -34,29 +40,42 @@ export default function MessagesScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.error}>{error instanceof Error ? error.message : 'Błąd ładowania wiadomości'}</Text>
+          <Text style={[styles.error, { color: colors.danger }]}>
+            {error instanceof Error ? error.message : 'Błąd ładowania wiadomości'}
+          </Text>
         </View>
       ) : (
         <FlatList<Message>
           data={messages}
           keyExtractor={(item) => item.Id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-          renderItem={({ item }) => (
-            <View style={styles.messageRow}>
-              <View style={styles.messageHeader}>
-                <Text style={styles.sender} numberOfLines={1}>
-                  {item.Sender.Name}
+          renderItem={({ item }) => {
+            const expanded = expandedId === item.Id;
+            return (
+              <Pressable
+                style={[styles.messageRow, { borderBottomColor: colors.border }]}
+                onPress={() => setExpandedId(expanded ? null : item.Id)}
+              >
+                <View style={styles.messageHeader}>
+                  <Text style={[styles.sender, { color: colors.text }]} numberOfLines={1}>
+                    {item.Sender.Name}
+                  </Text>
+                  <Text style={[styles.date, { color: colors.secondaryText }]}>{formatHebeDate(item.SentAt)}</Text>
+                </View>
+                <Text style={[styles.subject, { color: colors.secondaryText }]} numberOfLines={expanded ? undefined : 1}>
+                  {item.Subject}
                 </Text>
-                <Text style={styles.date}>{formatHebeDate(item.SentAt)}</Text>
-              </View>
-              <Text style={styles.subject} numberOfLines={1}>
-                {item.Subject}
-              </Text>
-            </View>
-          )}
+                {expanded && (
+                  <Text style={[styles.content, { color: colors.text }]} selectable>
+                    {htmlToPlainText(item.Content)}
+                  </Text>
+                )}
+              </Pressable>
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text>Brak wiadomości.</Text>
+              <Text style={{ color: colors.text }}>Brak wiadomości.</Text>
             </View>
           }
         />
@@ -68,20 +87,15 @@ export default function MessagesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  error: { color: '#d33', textAlign: 'center' },
-  tabBar: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ddd' },
+  error: { textAlign: 'center' },
+  tabBar: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#2f6fed' },
-  tabLabel: { color: '#888' },
-  tabLabelActive: { color: '#2f6fed', fontWeight: '600' },
-  messageRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
-  },
+  tabLabel: { fontSize: 14 },
+  tabLabelActive: { fontWeight: '600' },
+  messageRow: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   messageHeader: { flexDirection: 'row', justifyContent: 'space-between' },
   sender: { fontWeight: '600', flex: 1, marginRight: 8 },
-  date: { fontSize: 12, color: '#888' },
-  subject: { color: '#444', marginTop: 2 },
+  date: { fontSize: 12 },
+  subject: { marginTop: 2 },
+  content: { marginTop: 10, fontSize: 14, lineHeight: 20 },
 });
