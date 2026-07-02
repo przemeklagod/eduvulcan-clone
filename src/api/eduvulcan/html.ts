@@ -18,6 +18,8 @@ export function extractTag(html: string, matcher: RegExp): string | null {
 
 export function extractAttr(tag: string | null, attr: string): string | null {
   if (!tag) return null;
-  const match = tag.match(new RegExp(`${attr}="([^"]*)"`));
-  return match ? match[1] : null;
+  const doubleQuoted = tag.match(new RegExp(`${attr}="([^"]*)"`));
+  if (doubleQuoted) return doubleQuoted[1];
+  const singleQuoted = tag.match(new RegExp(`${attr}='([^']*)'`));
+  return singleQuoted ? singleQuoted[1] : null;
 }

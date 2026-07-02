@@ -10,7 +10,9 @@ export class CaptchaRejectedError extends EduVulcanLoginError {}
 
 interface QueryUserInfoResponse {
   success: boolean;
-  data: { ShowCaptcha: boolean; ExtraMessage: string | null };
+  // Observed live: `data` is a plain boolean (the ShowCaptcha answer itself), not an
+  // object. Kept the object shape too in case other accounts/tenants return it that way.
+  data: boolean | { ShowCaptcha: boolean; ExtraMessage: string | null };
 }
 
 interface ApResponse {
@@ -44,7 +46,7 @@ async function queryShowCaptcha(username: string): Promise<boolean> {
 
   try {
     const json = (await response.json()) as QueryUserInfoResponse;
-    return json?.data?.ShowCaptcha ?? false;
+    return typeof json?.data === 'boolean' ? json.data : (json?.data?.ShowCaptcha ?? false);
   } catch {
     return false;
   }
@@ -129,7 +131,7 @@ async function fetchApPayload(context: string): Promise<ApResponse> {
   const response = await fetch(`${BASE_URL}/api/ap`, { credentials: 'include', cache: 'no-store' });
   const html = await response.text();
 
-  const apTag = extractTag(html, /<input[^>]*id="ap"[^>]*>/);
+  const apTag = extractTag(html, /<input[^>]*id=["']ap["'][^>]*>/);
   const rawValue = extractAttr(apTag, 'value');
   if (!rawValue) {
     throw new InvalidCredentialsError(
