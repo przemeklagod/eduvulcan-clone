@@ -20,28 +20,31 @@ interface Props {
   onSent: () => void;
 }
 
+type ViewMode = 'compose' | 'pickRecipient';
+
 export function ComposeMessageModal({ visible, target, onClose, onSent }: Props) {
   const colors = useThemeColors();
   const { addresses, isLoading: loadingAddresses } = useAddressBook();
   const { send, isSending, error } = useSendMessage();
 
+  const [mode, setMode] = useState<ViewMode>('compose');
   const [recipient, setRecipient] = useState<{ globalKey: string; name: string } | null>(null);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const isReply = Boolean(target?.recipient);
   const effectiveRecipient = target?.recipient ?? recipient;
 
   const resetAndClose = () => {
+    setMode('compose');
     setRecipient(null);
     setSubject('');
     setContent('');
-    setPickerOpen(false);
     onClose();
   };
 
   const onOpen = () => {
+    setMode('compose');
     setSubject(target?.initialSubject ?? '');
     setContent('');
     setRecipient(null);
@@ -63,66 +66,11 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
   return (
     <Modal visible={visible} animationType="slide" onShow={onOpen} onRequestClose={resetAndClose}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <Pressable onPress={resetAndClose}>
-            <Text style={[styles.headerButton, { color: colors.accent }]}>Anuluj</Text>
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{isReply ? 'Odpowiedz' : 'Nowa wiadomość'}</Text>
-          <Pressable onPress={onSubmit} disabled={isSending || !effectiveRecipient || !subject.trim() || !content.trim()}>
-            {isSending ? (
-              <ActivityIndicator />
-            ) : (
-              <Text style={[styles.headerButton, { color: colors.accent }]}>Wyślij</Text>
-            )}
-          </Pressable>
-        </View>
-
-        <View style={styles.body}>
-          <Pressable
-            style={[styles.field, { borderBottomColor: colors.border }]}
-            onPress={() => !isReply && setPickerOpen(true)}
-            disabled={isReply}
-          >
-            <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Do</Text>
-            <Text style={[styles.fieldValue, { color: effectiveRecipient ? colors.text : colors.placeholder }]}>
-              {effectiveRecipient?.name ?? 'Wybierz odbiorcę…'}
-            </Text>
-          </Pressable>
-
-          <View style={[styles.field, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Temat</Text>
-            <TextInput
-              style={[styles.fieldInput, { color: colors.text }]}
-              value={subject}
-              onChangeText={setSubject}
-              editable={!isReply}
-              placeholder="Temat wiadomości"
-              placeholderTextColor={colors.placeholder}
-            />
-          </View>
-
-          <TextInput
-            style={[styles.contentInput, { color: colors.text }]}
-            value={content}
-            onChangeText={setContent}
-            placeholder="Treść wiadomości…"
-            placeholderTextColor={colors.placeholder}
-            multiline
-            textAlignVertical="top"
-          />
-
-          {error && (
-            <Text style={[styles.error, { color: colors.danger }]} selectable>
-              {error instanceof Error ? error.message : 'Nie udało się wysłać wiadomości'}
-            </Text>
-          )}
-        </View>
-
-        <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
-          <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {mode === 'pickRecipient' ? (
+          <>
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
-              <Pressable onPress={() => setPickerOpen(false)}>
-                <Text style={[styles.headerButton, { color: colors.accent }]}>Zamknij</Text>
+              <Pressable onPress={() => setMode('compose')}>
+                <Text style={[styles.headerButton, { color: colors.accent }]}>Wstecz</Text>
               </Pressable>
               <Text style={[styles.headerTitle, { color: colors.text }]}>Wybierz odbiorcę</Text>
               <View style={{ width: 60 }} />
@@ -140,7 +88,7 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
                     style={[styles.recipientRow, { borderBottomColor: colors.border }]}
                     onPress={() => {
                       setRecipient({ globalKey: item.GlobalKey, name: item.Name });
-                      setPickerOpen(false);
+                      setMode('compose');
                     }}
                   >
                     <Text style={[styles.recipientName, { color: colors.text }]}>{item.Name}</Text>
@@ -153,8 +101,65 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
                 }
               />
             )}
-          </View>
-        </Modal>
+          </>
+        ) : (
+          <>
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <Pressable onPress={resetAndClose}>
+                <Text style={[styles.headerButton, { color: colors.accent }]}>Anuluj</Text>
+              </Pressable>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>{isReply ? 'Odpowiedz' : 'Nowa wiadomość'}</Text>
+              <Pressable onPress={onSubmit} disabled={isSending || !effectiveRecipient || !subject.trim() || !content.trim()}>
+                {isSending ? (
+                  <ActivityIndicator />
+                ) : (
+                  <Text style={[styles.headerButton, { color: colors.accent }]}>Wyślij</Text>
+                )}
+              </Pressable>
+            </View>
+
+            <View style={styles.body}>
+              <Pressable
+                style={[styles.field, { borderBottomColor: colors.border }]}
+                onPress={() => !isReply && setMode('pickRecipient')}
+                disabled={isReply}
+              >
+                <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Do</Text>
+                <Text style={[styles.fieldValue, { color: effectiveRecipient ? colors.text : colors.placeholder }]}>
+                  {effectiveRecipient?.name ?? 'Wybierz odbiorcę…'}
+                </Text>
+              </Pressable>
+
+              <View style={[styles.field, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Temat</Text>
+                <TextInput
+                  style={[styles.fieldInput, { color: colors.text }]}
+                  value={subject}
+                  onChangeText={setSubject}
+                  editable={!isReply}
+                  placeholder="Temat wiadomości"
+                  placeholderTextColor={colors.placeholder}
+                />
+              </View>
+
+              <TextInput
+                style={[styles.contentInput, { color: colors.text }]}
+                value={content}
+                onChangeText={setContent}
+                placeholder="Treść wiadomości…"
+                placeholderTextColor={colors.placeholder}
+                multiline
+                textAlignVertical="top"
+              />
+
+              {error && (
+                <Text style={[styles.error, { color: colors.danger }]} selectable>
+                  {error instanceof Error ? error.message : 'Nie udało się wysłać wiadomości'}
+                </Text>
+              )}
+            </View>
+          </>
+        )}
       </View>
     </Modal>
   );
