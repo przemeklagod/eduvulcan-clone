@@ -70,31 +70,35 @@ async function fetchLoginPage(): Promise<{ csrfToken: string; captcha: { challen
   return { csrfToken, captcha };
 }
 
-async function submitLogin(username: string, password: string, csrfToken: string, captchaResponse: string): Promise<Response> {
+async function submitLogin(username: string, password: string, csrfToken: string, captchaResponse: string): Promise<void> {
   const body =
     `UserName=${encodeURIComponent(username)}` +
     `&Password=${encodeURIComponent(password)}` +
     `&captcha-response=${encodeURIComponent(captchaResponse)}` +
     `&__RequestVerificationToken=${encodeURIComponent(csrfToken)}`;
 
+  // The reference implementation disables redirect-following on this request so it
+  // can inspect the raw pre-redirect response: success = a Location header is
+  // present, failure = the (non-redirected) body contains "robot"/"robak". React
+  // Native's fetch does not honor `redirect: 'manual'` on iOS - it always follows
+  // redirects - so `response.headers.get('location')` is never populated here.
+  // `response.redirected` is still reliably set by the Fetch spec even when the
+  // redirect was auto-followed, so we use that as the success signal instead, and
+  // only inspect body text for the robot/captcha rejection when NOT redirected
+  // (avoids false positives from unrelated pages containing "robots" meta tags).
   const response = await fetch(`${BASE_URL}/logowanie`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
-    redirect: 'manual',
   });
 
-  let bodyText = '';
-  try {
-    bodyText = await response.text();
-  } catch {
-    // opaque redirect responses may not expose a readable body; ignore
-  }
+  if (response.redirected) return;
+
+  const bodyText = await response.text().catch(() => '');
   if (/robot|robak/i.test(bodyText)) {
     throw new CaptchaRejectedError('eduVulcan rejected the captcha response');
   }
-
-  return response;
+  throw new InvalidCredentialsError('eduVulcan login failed: no redirect after POST /logowanie (check username/password)');
 }
 
 async function fetchApPayload(): Promise<ApResponse> {
