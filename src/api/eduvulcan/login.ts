@@ -74,6 +74,24 @@ async function fetchLoginPage(): Promise<{ csrfToken: string; captcha: { challen
 
 interface SubmitLoginResult {
   status: number;
+  hints: string[];
+}
+
+const ERROR_KEYWORDS: Array<[needle: string, hint: string]> = [
+  ['nieprawidłow', 'invalid-credentials-text'],
+  ['błędny', 'wrong-text'],
+  ['błąd', 'error-text'],
+  ['captcha', 'captcha-mentioned'],
+  ['robot', 'robot-check-mentioned'],
+  ['zablokowa', 'account-locked-text'],
+  ['limit', 'rate-limit-text'],
+  ['validation-summary-errors', 'validation-summary-present'],
+  ['field-validation-error', 'field-validation-error-present'],
+];
+
+function scanForHints(html: string): string[] {
+  const lower = html.toLowerCase();
+  return ERROR_KEYWORDS.filter(([needle]) => lower.includes(needle)).map(([, hint]) => hint);
 }
 
 async function submitLogin(username: string, password: string, csrfToken: string, captchaResponse: string): Promise<SubmitLoginResult> {
@@ -91,10 +109,10 @@ async function submitLogin(username: string, password: string, csrfToken: string
   // of the login page by scanning the body for "robot"/"robak" - the page always
   // includes `<meta name="robots" content="noindex">`, which false-positives on
   // every non-redirected response regardless of the real cause. So this function
-  // does not try to interpret the response at all - it only submits the form and
-  // lets the session cookies (if any were set) speak for themselves. The actual
-  // success/failure signal comes from GET /api/ap afterwards, which reports
-  // Success/ErrorMessage explicitly.
+  // does not try to gate on the response - it only submits the form and lets the
+  // session cookies (if any were set) speak for themselves; success/failure is
+  // decided by GET /api/ap afterwards. It does, however, scan the body for known
+  // error keywords purely for diagnostics, surfaced in the thrown error context.
   const response = await fetch(`${BASE_URL}/logowanie`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -103,7 +121,8 @@ async function submitLogin(username: string, password: string, csrfToken: string
     cache: 'no-store',
   });
 
-  return { status: response.status };
+  const html = await response.text();
+  return { status: response.status, hints: scanForHints(html) };
 }
 
 async function fetchApPayload(context: string): Promise<ApResponse> {
@@ -139,7 +158,8 @@ export async function loginToEduVulcan(username: string, password: string): Prom
     showCaptcha && captcha ? solveCaptchaPow(captcha.challenge, captcha.difficulty, captcha.rounds) : '';
 
   const submitResult = await submitLogin(username, password, csrfToken, captchaResponse);
-  const context = `(POST /logowanie status=${submitResult.status}, showCaptcha=${showCaptcha}, hadCaptchaParams=${captcha !== null})`;
+  const hintsPart = submitResult.hints.length ? `, hints=[${submitResult.hints.join(',')}]` : ', hints=[]';
+  const context = `(POST /logowanie status=${submitResult.status}, showCaptcha=${showCaptcha}, hadCaptchaParams=${captcha !== null}, csrfLen=${csrfToken.length}${hintsPart})`;
 
   let ap = await fetchApPayload(context);
   if (!ap.Success) {
