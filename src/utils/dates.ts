@@ -31,3 +31,11 @@ export function getWeekRange(date: Date): { dateFrom: string; dateTo: string } {
 
   return { dateFrom: formatDateForApi(monday), dateTo: formatDateForApi(sunday) };
 }
+
+/** e.g. "13.01 - 19.01.2026" for the Monday-to-Sunday week containing `date`. */
+export function formatWeekRangeLabel(date: Date): string {
+  const { dateFrom, dateTo } = getWeekRange(date);
+  const [fromY, fromM, fromD] = dateFrom.split('-');
+  const [toY, toM, toD] = dateTo.split('-');
+  return `${fromD}.${fromM} - ${toD}.${toM}.${toY}`;
+}
