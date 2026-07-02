@@ -27,7 +27,7 @@ jobs:
         working-directory: ios
         run: |
           set -euo pipefail
-          WORKSPACE=$(ls *.xcworkspace | head -1)
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
           SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" -json | node -e "
             const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
             console.log(data.workspace.schemes.find(s => !s.includes('Tests')));
