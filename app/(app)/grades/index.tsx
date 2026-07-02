@@ -82,12 +82,27 @@ function buildLegend(grades: Grade[]): LegendEntry[] {
   return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
+// Numeric/letter grades ("5", "4+", "bdb", "ndst-") are short and fit the badge.
+// Descriptive grades (common in early primary years) are full sentences and need
+// their own wrapped, expandable text instead of being crammed into a 32x32 square.
+const DESCRIPTIVE_LENGTH_THRESHOLD = 6;
+
 export default function GradesScreen() {
   const colors = useThemeColors();
   const { grades, averages, summaries, periods, isLoading, isRefetching, error, refetch, hasActiveStudent } = useGrades();
   const sections = useMemo(() => buildSections(grades, averages, summaries, periods), [grades, averages, summaries, periods]);
   const legend = useMemo(() => buildLegend(grades), [grades]);
   const [showLegend, setShowLegend] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const toggleExpanded = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   if (!hasActiveStudent) {
     return (
@@ -159,17 +174,41 @@ export default function GradesScreen() {
           )}
         </View>
       )}
-      renderItem={({ item }) => (
-        <View style={styles.gradeRow}>
-          <View style={[styles.gradeBadge, { backgroundColor: colorHex(item.Column.Color) }]}>
-            <Text style={styles.gradeValue}>{item.Content}</Text>
+      renderItem={({ item }) => {
+        const isDescriptive = item.Content.length > DESCRIPTIVE_LENGTH_THRESHOLD;
+        const expanded = expandedIds.has(item.Id);
+        return (
+          <View style={styles.gradeRow}>
+            {isDescriptive ? (
+              <View style={[styles.gradeDot, { backgroundColor: colorHex(item.Column.Color) }]} />
+            ) : (
+              <View style={[styles.gradeBadge, { backgroundColor: colorHex(item.Column.Color) }]}>
+                <Text style={styles.gradeValue}>{item.Content}</Text>
+              </View>
+            )}
+            <View style={styles.gradeInfo}>
+              <Text style={[styles.gradeColumnName, { color: colors.text }]}>{item.Column.Name}</Text>
+              <Text style={[styles.gradeDate, { color: colors.secondaryText }]}>{formatHebeDate(item.CreatedAt)}</Text>
+              {isDescriptive &&
+                (expanded ? (
+                  <Pressable onPress={() => toggleExpanded(item.Id)}>
+                    <Text style={[styles.descriptiveContent, { color: colors.text }]} selectable>
+                      {item.Content}
+                    </Text>
+                    <Text style={[styles.expandToggle, { color: colors.accent }]}>Zwiń</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable onPress={() => toggleExpanded(item.Id)}>
+                    <Text style={[styles.descriptiveContent, { color: colors.text }]} numberOfLines={3}>
+                      {item.Content}
+                    </Text>
+                    <Text style={[styles.expandToggle, { color: colors.accent }]}>Pokaż całość</Text>
+                  </Pressable>
+                ))}
+            </View>
           </View>
-          <View style={styles.gradeInfo}>
-            <Text style={[styles.gradeColumnName, { color: colors.text }]}>{item.Column.Name}</Text>
-            <Text style={[styles.gradeDate, { color: colors.secondaryText }]}>{formatHebeDate(item.CreatedAt)}</Text>
-          </View>
-        </View>
-      )}
+        );
+      }}
       ListEmptyComponent={
         <View style={styles.center}>
           <Text style={{ color: colors.text }}>Brak ocen w tym okresie.</Text>
@@ -195,10 +234,13 @@ const styles = StyleSheet.create({
   average: {},
   summaryLines: { gap: 2 },
   summaryLine: { fontSize: 12 },
-  gradeRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 12 },
+  gradeRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 10, gap: 12 },
   gradeBadge: { width: 32, height: 32, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  gradeDot: { width: 14, height: 14, borderRadius: 7, marginTop: 4 },
   gradeValue: { color: '#fff', fontWeight: '700' },
   gradeInfo: { flex: 1 },
   gradeColumnName: { fontSize: 14 },
   gradeDate: { fontSize: 12 },
+  descriptiveContent: { fontSize: 14, lineHeight: 20, marginTop: 6 },
+  expandToggle: { fontSize: 12, fontWeight: '600', marginTop: 4 },
 });
