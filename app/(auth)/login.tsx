@@ -1,11 +1,27 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useColorScheme,
+} from 'react-native';
 import { useAccounts } from '@/src/auth/accountsContext';
 
 export default function LoginScreen() {
   const { login } = useAccounts();
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
+  const colors = {
+    background: isDark ? '#000' : '#fff',
+    text: isDark ? '#fff' : '#111',
+    border: isDark ? '#555' : '#ccc',
+    placeholder: isDark ? '#888' : '#999',
+  };
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -27,12 +43,16 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>eduVulcan</Text>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={[styles.title, { color: colors.text }]}>eduVulcan</Text>
 
       <TextInput
-        style={styles.input}
+        style={[styles.input, { color: colors.text, borderColor: colors.border }]}
         placeholder="Login"
+        placeholderTextColor={colors.placeholder}
         autoCapitalize="none"
         autoCorrect={false}
         value={username}
@@ -41,8 +61,9 @@ export default function LoginScreen() {
       />
       <View style={styles.passwordRow}>
         <TextInput
-          style={[styles.input, styles.passwordInput]}
+          style={[styles.input, styles.passwordInput, { color: colors.text, borderColor: colors.border }]}
           placeholder="Hasło"
+          placeholderTextColor={colors.placeholder}
           secureTextEntry={!showPassword}
           autoCapitalize="none"
           autoCorrect={false}
@@ -67,7 +88,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12 },
   title: { fontSize: 28, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 16 },
+  input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },
   passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   passwordInput: { flex: 1 },
   showPasswordButton: { paddingHorizontal: 12, paddingVertical: 12 },

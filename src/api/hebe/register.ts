@@ -13,10 +13,14 @@ export interface RegisteredTenant {
 }
 
 /**
- * Registers a new device credential for one eduVulcan tenant, using the tenant's
- * JWT from the Stage 1 web login. Ported from SzpontHebeCeApi.registerByJwt.
+ * Registers a new device credential for one eduVulcan tenant, using ALL of that
+ * tenant's JWTs from the Stage 1 web login in a single call. A tenant can carry
+ * multiple children (and multiple schools per child) as separate JWTs that all
+ * share the same `tenant` value - the registration payload's `Tokens` field is
+ * an array specifically to bind them all to one device credential in one shot.
+ * Ported from SzpontHebeCeApi.registerByJwt.
  */
-export async function registerTenant(tenant: string, jwt: string, deviceModel: string): Promise<RegisteredTenant> {
+export async function registerTenant(tenant: string, jwts: string[], deviceModel: string): Promise<RegisteredTenant> {
   const keys = generateRsaCredentialKeys();
 
   const credential: HebeCredential = {
@@ -36,7 +40,7 @@ export async function registerTenant(tenant: string, jwt: string, deviceModel: s
     DeviceModel: deviceModel,
     SelfIdentifier: credential.deviceId,
     CertificateThumbprint: keys.fingerprint,
-    Tokens: [jwt],
+    Tokens: jwts,
   };
 
   await hebePost(credential, 'mobile/register/jwt', payload);

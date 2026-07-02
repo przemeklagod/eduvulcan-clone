@@ -30,7 +30,7 @@ interface ApResponse {
 
 export interface EduVulcanSession {
   mainAccessToken: string;
-  tenantTokens: Map<string, string>;
+  tenantTokens: Map<string, string[]>;
   alias: string;
   email: string;
 }

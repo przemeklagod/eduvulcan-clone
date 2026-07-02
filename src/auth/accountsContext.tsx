@@ -48,8 +48,8 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
     async (username: string, password: string) => {
       const session = await loginToEduVulcan(username, password);
 
-      for (const [tenant, jwt] of session.tenantTokens) {
-        const { credential, students } = await registerTenant(tenant, jwt, DEVICE_MODEL);
+      for (const [tenant, jwts] of session.tenantTokens) {
+        const { credential, students } = await registerTenant(tenant, jwts, DEVICE_MODEL);
         await saveTenant(tenant, credential, students);
       }
 
@@ -86,5 +86,13 @@ export function useActiveCredential() {
   if (!active) return null;
   const stored = tenants.find((t) => t.credential.tenant === active.tenant);
   if (!stored) return null;
-  return { credential: stored.credential, pupilId: active.pupilId, students: stored.students };
+
+  // Domain calls (grades/schedule/...) must hit the active pupil's own reporting
+  // unit, not the tenant-wide registration URL - Vulcan can host multiple schools
+  // under one tenant, each with its own unit REST path (confirmed live: two
+  // schools under the same "lublin" tenant had different Unit.RestURL values).
+  const student = stored.students.find((s) => s.Pupil.Id === active.pupilId);
+  const credential = student ? { ...stored.credential, restUrl: student.Unit.RestURL } : stored.credential;
+
+  return { credential, pupilId: active.pupilId, students: stored.students };
 }
