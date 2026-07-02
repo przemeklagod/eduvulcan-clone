@@ -60,3 +60,4 @@ jobs:
           name: eduvulcan-clone-unsigned-ipa
           path: ios/eduvulcan-clone-unsigned.ipa
           retention-days: 14
+
