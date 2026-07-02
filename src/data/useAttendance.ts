@@ -2,14 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { getPresenceMonthStats, getPresenceSubjectStats } from '../api/hebe/endpoints/presence';
 import { useActiveCredential } from '../auth/accountsContext';
 
-function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }>): number | undefined {
-  return periods.find((p) => p.Current)?.Id ?? periods[0]?.Id;
+// Inactive/historical enrollments (e.g. a school the pupil no longer attends)
+// can come back with Periods: null instead of [] - guard against that.
+function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }> | null | undefined): number | undefined {
+  return periods?.find((p) => p.Current)?.Id ?? periods?.[0]?.Id;
 }
 
 export function useAttendance() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
-  const periodId = student ? findCurrentPeriodId(student.Periods) : undefined;
+  const periodId = findCurrentPeriodId(student?.Periods);
   const enabled = Boolean(activeInfo && periodId !== undefined);
 
   const monthStatsQuery = useQuery({

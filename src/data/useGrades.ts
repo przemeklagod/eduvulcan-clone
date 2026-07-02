@@ -3,16 +3,18 @@ import { getGradeAverages, getGradeSummary, getGrades } from '../api/hebe/endpoi
 import type { GradeSummary } from '../api/hebe/types/grade';
 import { useActiveCredential } from '../auth/accountsContext';
 
-function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }>): number | undefined {
-  return periods.find((p) => p.Current)?.Id ?? periods[0]?.Id;
+// Inactive/historical enrollments (e.g. a school the pupil no longer attends)
+// can come back with Periods: null instead of [] - guard against that.
+function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }> | null | undefined): number | undefined {
+  return periods?.find((p) => p.Current)?.Id ?? periods?.[0]?.Id;
 }
 
 export function useGrades() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
-  const periodId = student ? findCurrentPeriodId(student.Periods) : undefined;
-  const unitId = student?.Unit.Id;
   const periods = student?.Periods ?? [];
+  const periodId = findCurrentPeriodId(periods);
+  const unitId = student?.Unit.Id;
   const enabled = Boolean(activeInfo && student && periodId !== undefined && unitId !== undefined);
 
   const params = enabled ? { unitId: unitId!, pupilId: activeInfo!.pupilId, periodId: periodId! } : null;
