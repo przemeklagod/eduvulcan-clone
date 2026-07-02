@@ -28,10 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           WORKSPACE=$(ls -d *.xcworkspace | head -1)
-          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" -json | node -e "
-            const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-            console.log(data.workspace.schemes.find(s => !s.includes('Tests')));
-          ")
+          PROJECT=$(ls -d *.xcodeproj | grep -v '^Pods\.xcodeproj$' | head -1)
+          SCHEME="${PROJECT%.xcodeproj}"
           echo "Building workspace=$WORKSPACE scheme=$SCHEME"
           xcodebuild \
             -workspace "$WORKSPACE" \
