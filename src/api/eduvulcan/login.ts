@@ -38,6 +38,8 @@ async function queryShowCaptcha(username: string): Promise<boolean> {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `UserName=${encodeURIComponent(username)}`,
+    credentials: 'include',
+    cache: 'no-store',
   });
 
   try {
@@ -49,7 +51,7 @@ async function queryShowCaptcha(username: string): Promise<boolean> {
 }
 
 async function fetchLoginPage(): Promise<{ csrfToken: string; captcha: { challenge: string; difficulty: number; rounds: number } | null }> {
-  const response = await fetch(`${BASE_URL}/logowanie`);
+  const response = await fetch(`${BASE_URL}/logowanie`, { credentials: 'include', cache: 'no-store' });
   const html = await response.text();
 
   const csrfTag = extractTag(html, /<input[^>]*name="__RequestVerificationToken"[^>]*>/);
@@ -97,13 +99,15 @@ async function submitLogin(username: string, password: string, csrfToken: string
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
+    credentials: 'include',
+    cache: 'no-store',
   });
 
   return { status: response.status };
 }
 
 async function fetchApPayload(context: string): Promise<ApResponse> {
-  const response = await fetch(`${BASE_URL}/api/ap`);
+  const response = await fetch(`${BASE_URL}/api/ap`, { credentials: 'include', cache: 'no-store' });
   const html = await response.text();
 
   const apTag = extractTag(html, /<input[^>]*id="ap"[^>]*>/);
@@ -122,6 +126,8 @@ async function acceptConsent(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'Consent[0].Key=4&Consent[0].Value=true',
+    credentials: 'include',
+    cache: 'no-store',
   });
 }
 
