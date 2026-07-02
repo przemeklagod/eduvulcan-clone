@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAccounts } from '@/src/auth/accountsContext';
 
 export default function LoginScreen() {
@@ -26,7 +26,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>eduVulcan</Text>
 
       <TextInput
@@ -47,20 +47,20 @@ export default function LoginScreen() {
         editable={!submitting}
       />
 
-      {error && <Text style={styles.error}>{error}</Text>}
-
       <Pressable style={styles.button} onPress={onSubmit} disabled={submitting || !username || !password}>
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Zaloguj</Text>}
       </Pressable>
-    </View>
+
+      {error && <Text style={styles.error} selectable>{error}</Text>}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12 },
   title: { fontSize: 28, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 16 },
   button: { backgroundColor: '#2f6fed', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  error: { color: '#d33', textAlign: 'center' },
+  error: { color: '#d33', textAlign: 'left', fontSize: 12, marginTop: 16 },
 });

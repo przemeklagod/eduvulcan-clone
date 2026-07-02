@@ -70,7 +70,20 @@ async function fetchLoginPage(): Promise<{ csrfToken: string; captcha: { challen
   return { csrfToken, captcha };
 }
 
-async function submitLogin(username: string, password: string, csrfToken: string, captchaResponse: string): Promise<void> {
+function snippetAround(text: string, needle: RegExp, radius: number): string {
+  const match = text.match(needle);
+  if (!match || match.index === undefined) return text.slice(0, radius * 2);
+  const start = Math.max(0, match.index - radius);
+  return text.slice(start, match.index + radius);
+}
+
+async function submitLogin(
+  username: string,
+  password: string,
+  csrfToken: string,
+  captchaResponse: string,
+  diagnostics: { showCaptcha: boolean; hadCaptchaParams: boolean }
+): Promise<void> {
   const body =
     `UserName=${encodeURIComponent(username)}` +
     `&Password=${encodeURIComponent(password)}` +
@@ -95,10 +108,21 @@ async function submitLogin(username: string, password: string, csrfToken: string
   if (response.redirected) return;
 
   const bodyText = await response.text().catch(() => '');
+  const diag =
+    `status=${response.status} redirected=${response.redirected} bodyLen=${bodyText.length} ` +
+    `showCaptcha=${diagnostics.showCaptcha} hadCaptchaParams=${diagnostics.hadCaptchaParams} ` +
+    `stillHasCaptchaWrapper=${/captcha-wrapper/i.test(bodyText)}`;
+
   if (/robot|robak/i.test(bodyText)) {
-    throw new CaptchaRejectedError('eduVulcan rejected the captcha response');
+    throw new CaptchaRejectedError(
+      `eduVulcan rejected the captcha response. ${diag}\n` +
+        `Snippet: ${snippetAround(bodyText, /robot|robak/i, 200)}`
+    );
   }
-  throw new InvalidCredentialsError('eduVulcan login failed: no redirect after POST /logowanie (check username/password)');
+  throw new InvalidCredentialsError(
+    `eduVulcan login failed: no redirect after POST /logowanie (check username/password). ${diag}\n` +
+      `Snippet: ${bodyText.slice(0, 400)}`
+  );
 }
 
 async function fetchApPayload(): Promise<ApResponse> {
@@ -129,7 +153,10 @@ export async function loginToEduVulcan(username: string, password: string): Prom
   const captchaResponse =
     showCaptcha && captcha ? solveCaptchaPow(captcha.challenge, captcha.difficulty, captcha.rounds) : '';
 
-  await submitLogin(username, password, csrfToken, captchaResponse);
+  await submitLogin(username, password, csrfToken, captchaResponse, {
+    showCaptcha,
+    hadCaptchaParams: captcha !== null,
+  });
 
   let ap = await fetchApPayload();
   if (!ap.Success) {
