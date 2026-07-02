@@ -104,7 +104,9 @@ export default function ScheduleScreen() {
             const cancelled = item.Substitution?.ClassAbsence || item.Substitution?.NoRoom;
             return (
               <View style={styles.lessonRow}>
-                <Text style={[styles.time, { color: colors.secondaryText }]}>{item.TimeSlot.Display}</Text>
+                <Text style={[styles.time, { color: colors.secondaryText }]} numberOfLines={1}>
+                  {item.TimeSlot.Display}
+                </Text>
                 <View style={styles.lessonInfo}>
                   <Text
                     style={[
@@ -156,7 +158,7 @@ const styles = StyleSheet.create({
   sectionHeader: { paddingHorizontal: 16, paddingVertical: 8 },
   dayName: { fontWeight: '700', fontSize: 15 },
   lessonRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 12 },
-  time: { width: 56, fontSize: 12 },
+  time: { width: 82, fontSize: 12 },
   lessonInfo: { flex: 1 },
   subjectName: { fontSize: 15, fontWeight: '600' },
   details: { fontSize: 13 },
