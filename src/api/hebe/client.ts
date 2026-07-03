@@ -79,8 +79,23 @@ async function hebeRequest<TResponse>(
   if (responseText.includes('<!DOCTYPE')) {
     throw new Error(`Hebe request to ${endpoint} returned an HTML error page (status ${response.status})`);
   }
+
   if (!response.ok) {
-    throw new Error(`Hebe request to ${endpoint} failed with HTTP ${response.status}`);
+    // Hebe returns a normal JSON envelope with a real Status.Code/Message even on
+    // HTTP 4xx/5xx (e.g. a 500 from a malformed request body still carries
+    // "NullReferenceException" or similar in Status.Message) - surface that
+    // instead of just the bare status code, which was otherwise the only thing
+    // ever shown for actual server-side errors.
+    try {
+      const envelope = JSON.parse(responseText) as ApiResponse<unknown>;
+      if (envelope?.Status?.Message) {
+        throw new HebeApiError(envelope.Status.Code, envelope.Status.Message);
+      }
+    } catch (e) {
+      if (e instanceof HebeApiError) throw e;
+      // responseText wasn't a parseable envelope - fall through to the generic error below.
+    }
+    throw new Error(`Hebe request to ${endpoint} failed with HTTP ${response.status}: ${responseText.slice(0, 500)}`);
   }
 
   const envelope = JSON.parse(responseText) as ApiResponse<TResponse>;
