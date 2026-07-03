@@ -18,17 +18,14 @@ export interface SendMessageParams {
 }
 
 /**
- * EXPERIMENTAL - not present in any known open-source Hebe client. `mobile/messages`
- * is confirmed to exist as a real route (a deliberately-incomplete probe body got a
- * proper Hebe envelope error, not a 404), but the exact required field shape is a
- * best-effort reconstruction from an analogous (older, differently-pathed) C# client
- * (dolczykk/Vulcanova.Uonet's `mobile/messagebox/message` SendMessageRequest) adapted
- * to match this project's confirmed field-naming conventions (BoxKey/Receiver as used
- * by changeMessageStatus below). A first live attempt without a `Sender` field got a
- * generic 500 "NullReferenceException" from Hebe - the same crash a deliberately
- * incomplete probe got - so `Sender` (present in the C# reference's request shape,
- * and mirroring the `Sender: MessageAddress` field already returned by the read
- * endpoints below) is now included as the most likely missing required field.
+ * Confirmed working live (sent message appeared in the official eduVulcan app's
+ * "Wysłane" folder). Not present in any known open-source Hebe client - this shape
+ * was reconstructed from an analogous (older, differently-pathed) C# client
+ * (dolczykk/Vulcanova.Uonet's `mobile/messagebox/message` SendMessageRequest),
+ * adapted to this project's confirmed field-naming conventions. The key finding:
+ * `Sender` (a `{GlobalKey, Name}` MessageAddress, same shape the read endpoints
+ * return) is required - omitting it crashes the endpoint with a generic 500
+ * "NullReferenceException".
  */
 export function sendMessage(credential: HebeCredential, params: SendMessageParams): Promise<void> {
   return hebePost(credential, 'mobile/messages', {
