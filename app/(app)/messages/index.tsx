@@ -19,6 +19,7 @@ export default function MessagesScreen() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const myBoxKey = student?.MessageBox?.GlobalKey;
+  const myBoxName = student?.MessageBox?.Name;
 
   const [folder, setFolder] = useState<MessageFolder>('received');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -37,8 +38,8 @@ export default function MessagesScreen() {
             </Pressable>
           ))}
         </View>
-        {myBoxKey && (
-          <Pressable style={styles.newButton} onPress={() => setComposeTarget({ boxKey: myBoxKey })}>
+        {myBoxKey && myBoxName && (
+          <Pressable style={styles.newButton} onPress={() => setComposeTarget({ boxKey: myBoxKey, senderName: myBoxName })}>
             <Text style={[styles.newButtonLabel, { color: colors.accent }]}>Nowa wiadomość</Text>
           </Pressable>
         )}
@@ -84,12 +85,13 @@ export default function MessagesScreen() {
                     <Text style={[styles.content, { color: colors.text }]} selectable>
                       {htmlToPlainText(item.Content)}
                     </Text>
-                    {myBoxKey && folder === 'received' && (
+                    {myBoxKey && myBoxName && folder === 'received' && (
                       <Pressable
                         style={styles.replyButton}
                         onPress={() =>
                           setComposeTarget({
                             boxKey: myBoxKey,
+                            senderName: myBoxName,
                             threadKey: item.ThreadKey,
                             initialSubject: item.Subject.startsWith('RE:') ? item.Subject : `RE: ${item.Subject}`,
                             recipient: { globalKey: item.Sender.GlobalKey, name: item.Sender.Name },

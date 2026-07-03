@@ -8,6 +8,8 @@ type BoxParams = { box: string; pupilId: number };
 export interface SendMessageParams {
   /** The sender's own message box (AccountMessageBox.GlobalKey). */
   boxKey: string;
+  /** The sender's own display name as it appears in others' addressbooks (AccountMessageBox.Name). */
+  senderName: string;
   /** Existing thread to reply into, or omit to start a new conversation. */
   threadKey?: string;
   subject: string;
@@ -22,8 +24,11 @@ export interface SendMessageParams {
  * best-effort reconstruction from an analogous (older, differently-pathed) C# client
  * (dolczykk/Vulcanova.Uonet's `mobile/messagebox/message` SendMessageRequest) adapted
  * to match this project's confirmed field-naming conventions (BoxKey/Receiver as used
- * by changeMessageStatus below). Ported blind - not live-tested, to avoid sending a
- * real test message to a real teacher. The first real call IS the live test.
+ * by changeMessageStatus below). A first live attempt without a `Sender` field got a
+ * generic 500 "NullReferenceException" from Hebe - the same crash a deliberately
+ * incomplete probe got - so `Sender` (present in the C# reference's request shape,
+ * and mirroring the `Sender: MessageAddress` field already returned by the read
+ * endpoints below) is now included as the most likely missing required field.
  */
 export function sendMessage(credential: HebeCredential, params: SendMessageParams): Promise<void> {
   return hebePost(credential, 'mobile/messages', {
@@ -31,6 +36,7 @@ export function sendMessage(credential: HebeCredential, params: SendMessageParam
     ...(params.threadKey ? { ThreadKey: params.threadKey } : {}),
     Subject: params.subject,
     Content: params.content,
+    Sender: { GlobalKey: params.boxKey, Name: params.senderName },
     Receiver: params.receivers.map((r) => ({ GlobalKey: r.globalKey, Name: r.name })),
   });
 }

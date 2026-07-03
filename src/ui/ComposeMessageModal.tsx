@@ -7,6 +7,7 @@ import { useThemeColors } from './theme';
 
 export interface ComposeTarget {
   boxKey: string;
+  senderName: string;
   threadKey?: string;
   initialSubject?: string;
   /** Locked recipient (reply) - if omitted, the user picks one from the address book (compose). */
@@ -65,6 +66,7 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
     try {
       await send({
         boxKey: target.boxKey,
+        senderName: target.senderName,
         threadKey: target.threadKey,
         subject: subject.trim(),
         content: content.trim(),
