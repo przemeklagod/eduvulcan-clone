@@ -37,23 +37,34 @@ function JustifyAbsenceModal({
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const { justify, isSubmitting, error, reset } = useJustifyAbsence();
   const [reason, setReason] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const close = () => {
     setReason('');
+    setValidationError(null);
     reset();
     onClose();
   };
 
+  // The button is never silently disabled - every failure to submit is shown as
+  // text, since a disabled button with no explanation reads as "nothing happens".
   const submit = async () => {
-    if (!absence || !student || !reason.trim()) return;
-    await justify({
-      lessonClassId: absence.IdWeakRef ?? absence.Id,
-      pupilId: student.Pupil.Id,
-      loginId: student.Pupil.LoginId,
-      reason: reason.trim(),
-    });
-    setReason('');
-    onJustified();
+    setValidationError(null);
+    if (!absence || !student) return;
+    if (!reason.trim()) return setValidationError('Podaj powód nieobecności.');
+
+    try {
+      await justify({
+        lessonClassId: absence.IdWeakRef ?? absence.Id,
+        pupilId: student.Pupil.Id,
+        loginId: student.Pupil.LoginId,
+        reason: reason.trim(),
+      });
+      setReason('');
+      onJustified();
+    } catch (e) {
+      console.error('justifyAbsence failed', e);
+    }
   };
 
   return (
@@ -75,6 +86,7 @@ function JustifyAbsenceModal({
             multiline
             textAlignVertical="top"
           />
+          {validationError && <Text style={[styles.modalError, { color: colors.danger }]}>{validationError}</Text>}
           {error && (
             <Text style={[styles.modalError, { color: colors.danger }]} selectable>
               {error instanceof Error ? error.message : 'Nie udało się wysłać usprawiedliwienia'}
@@ -84,7 +96,7 @@ function JustifyAbsenceModal({
             <Pressable style={styles.modalButton} onPress={close}>
               <Text style={[styles.modalButtonLabel, { color: colors.secondaryText }]}>Anuluj</Text>
             </Pressable>
-            <Pressable style={styles.modalButton} onPress={submit} disabled={isSubmitting || !reason.trim()}>
+            <Pressable style={styles.modalButton} onPress={submit} disabled={isSubmitting} hitSlop={12}>
               {isSubmitting ? <ActivityIndicator /> : <Text style={[styles.modalButtonLabel, { color: colors.accent }]}>Wyślij</Text>}
             </Pressable>
           </View>

@@ -31,6 +31,7 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
   const [recipient, setRecipient] = useState<{ globalKey: string; name: string } | null>(null);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const isReply = Boolean(target?.recipient);
   const effectiveRecipient = target?.recipient ?? recipient;
@@ -40,6 +41,7 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
     setRecipient(null);
     setSubject('');
     setContent('');
+    setValidationError(null);
     onClose();
   };
 
@@ -48,19 +50,34 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
     setSubject(target?.initialSubject ?? '');
     setContent('');
     setRecipient(null);
+    setValidationError(null);
   };
 
+  // The button is never silently disabled - every failure to submit is shown as
+  // text, since a disabled button with no explanation reads as "nothing happens".
   const onSubmit = async () => {
-    if (!target || !effectiveRecipient || !subject.trim() || !content.trim()) return;
-    await send({
-      boxKey: target.boxKey,
-      threadKey: target.threadKey,
-      subject: subject.trim(),
-      content: content.trim(),
-      receivers: [effectiveRecipient],
-    });
-    resetAndClose();
-    onSent();
+    setValidationError(null);
+    if (!target) return;
+    if (!effectiveRecipient) return setValidationError('Wybierz odbiorcę.');
+    if (!subject.trim()) return setValidationError('Podaj temat wiadomości.');
+    if (!content.trim()) return setValidationError('Wpisz treść wiadomości.');
+
+    try {
+      await send({
+        boxKey: target.boxKey,
+        threadKey: target.threadKey,
+        subject: subject.trim(),
+        content: content.trim(),
+        receivers: [effectiveRecipient],
+      });
+      resetAndClose();
+      onSent();
+    } catch (e) {
+      // useSendMessage already exposes this via `error`, rendered below - this
+      // catch only stops the rejection from becoming an unhandled promise
+      // rejection (silently swallowed in a Release build with no visible sign).
+      console.error('sendMessage failed', e);
+    }
   };
 
   return (
@@ -109,7 +126,7 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
                 <Text style={[styles.headerButton, { color: colors.accent }]}>Anuluj</Text>
               </Pressable>
               <Text style={[styles.headerTitle, { color: colors.text }]}>{isReply ? 'Odpowiedz' : 'Nowa wiadomość'}</Text>
-              <Pressable onPress={onSubmit} disabled={isSending || !effectiveRecipient || !subject.trim() || !content.trim()}>
+              <Pressable onPress={onSubmit} disabled={isSending} hitSlop={12}>
                 {isSending ? (
                   <ActivityIndicator />
                 ) : (
@@ -152,6 +169,9 @@ export function ComposeMessageModal({ visible, target, onClose, onSent }: Props)
                 textAlignVertical="top"
               />
 
+              {validationError && (
+                <Text style={[styles.error, { color: colors.danger }]}>{validationError}</Text>
+              )}
               {error && (
                 <Text style={[styles.error, { color: colors.danger }]} selectable>
                   {error instanceof Error ? error.message : 'Nie udało się wysłać wiadomości'}
