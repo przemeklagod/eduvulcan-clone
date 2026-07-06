@@ -1,8 +1,9 @@
 import { Tabs } from 'expo-router';
+import { ActiveChildBadge } from '@/src/ui/ActiveChildBadge';
 
 export default function AppLayout() {
   return (
-    <Tabs>
+    <Tabs screenOptions={{ headerRight: () => <ActiveChildBadge /> }}>
       <Tabs.Screen name="grades/index" options={{ title: 'Oceny' }} />
       <Tabs.Screen name="schedule/index" options={{ title: 'Plan lekcji' }} />
       <Tabs.Screen name="attendance/index" options={{ title: 'Frekwencja' }} />
