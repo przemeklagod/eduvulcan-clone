@@ -7,26 +7,26 @@ type DateRangeParams = { pupilId: number; dateFrom: string; dateTo: string };
 type PeriodParams = { pupilId: number; periodId: number };
 
 export interface JustifyAbsenceParams {
-  /** The specific lesson occurrence to justify - PresenceExtra.IdWeakRef if present, else its own Id. */
+  /** Lesson.LessonClassId - from a `mobile/lesson/byPupil` record, NOT a PresenceExtra id. */
   lessonClassId: number;
   pupilId: number;
-  /** Pupil.LoginId (distinct from Pupil.Id) - required by the older sibling endpoint this is ported from. */
+  /** Pupil.LoginId (distinct from Pupil.Id). */
   loginId: number;
   reason: string;
 }
 
 /**
- * EXPERIMENTAL - `mobile/presence/justification` is confirmed to exist as a real
- * route (a deliberately-incomplete probe got a proper Hebe envelope error, not a
- * 404), but the exact field shape is a best-effort reconstruction from an analogous
- * (older, differently-pathed) C# client (dolczykk/Vulcanova.Uonet's
- * `mobile/presence/justification/lesson` JustifyLessonRequest: Reason/LessonClassId/
- * PupilId/LoginId), adapted to drop the now-presumably-merged `/lesson` path segment.
- * Ported blind - not live-tested, to avoid writing a bogus justification onto a real
- * child's official school record. The first real call IS the live test.
+ * Confirmed against dolczykk/Vulcanova - a real, shipped Xamarin Vulcan client
+ * (not just an API library) whose LessonsService.SubmitAbsenceJustification does
+ * exactly this: POST to `mobile/presence/justification/lesson` (the "/lesson"
+ * suffix is real, not legacy - an earlier guess that the modern API dropped it,
+ * matching mobile/messages, was wrong and is what caused a NullReferenceException)
+ * with body `{Reason, LessonClassId, PupilId, LoginId}`, where LessonClassId comes
+ * from a Lesson record's own LessonClassId field (mobile/lesson/byPupil) - not
+ * from PresenceExtra, which has no such field at all.
  */
 export function justifyAbsence(credential: HebeCredential, params: JustifyAbsenceParams): Promise<void> {
-  return hebePost(credential, 'mobile/presence/justification', {
+  return hebePost(credential, 'mobile/presence/justification/lesson', {
     Reason: params.reason,
     LessonClassId: params.lessonClassId,
     PupilId: params.pupilId,

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getPresenceExtra, getPresenceMonthStats, getPresenceSubjectStats } from '../api/hebe/endpoints/presence';
+import { getCompletedLessons } from '../api/hebe/endpoints/lessons';
+import { getPresenceMonthStats, getPresenceSubjectStats } from '../api/hebe/endpoints/presence';
 import { useActiveCredential } from '../auth/accountsContext';
 import { formatDateForApi } from '../utils/dates';
 
@@ -32,14 +33,26 @@ export function useAttendance() {
     enabled,
   });
 
-  const extraQuery = useQuery({
-    queryKey: ['presenceExtra', activeInfo?.credential.tenant, activeInfo?.pupilId, dateFrom, dateTo],
-    queryFn: () => getPresenceExtra(activeInfo!.credential, { pupilId: activeInfo!.pupilId, dateFrom: dateFrom!, dateTo }),
+  // Lessons (not PresenceExtra) carry the LessonClassId that justifyAbsence needs -
+  // confirmed against the real Vulcanova client's LessonsService, which builds its
+  // "can be justified" list the same way: Absence/Late, not yet justified, and no
+  // justification already submitted/pending.
+  const lessonsQuery = useQuery({
+    queryKey: ['lessons', activeInfo?.credential.tenant, activeInfo?.pupilId, dateFrom, dateTo],
+    queryFn: () => getCompletedLessons(activeInfo!.credential, { pupilId: activeInfo!.pupilId, dateFrom: dateFrom!, dateTo }),
     enabled: enabled && Boolean(dateFrom),
   });
 
-  const unexcusedAbsences = (extraQuery.data ?? [])
-    .filter((p) => p.PresenceType?.Absence && !p.PresenceType?.AbsenceJustified)
+  const unexcusedAbsences = (lessonsQuery.data ?? [])
+    .filter(
+      (l) =>
+        l.PresenceType?.Absence &&
+        !l.PresenceType.AbsenceJustified &&
+        l.JustificationStatus == null &&
+        // A few records come back with LessonClassId 0 (seen on days with a
+        // schedule anomaly, no Subject either) - not a real justifiable lesson.
+        l.LessonClassId
+    )
     .sort((a, b) => a.DayAt.localeCompare(b.DayAt) || a.TimeSlot.Position - b.TimeSlot.Position);
 
   return {
@@ -47,11 +60,11 @@ export function useAttendance() {
     subjectStats: subjectStatsQuery.data ?? [],
     unexcusedAbsences,
     isLoading: monthStatsQuery.isLoading || subjectStatsQuery.isLoading,
-    isLoadingExtra: extraQuery.isLoading,
-    isRefetching: monthStatsQuery.isRefetching || subjectStatsQuery.isRefetching || extraQuery.isRefetching,
+    isLoadingExtra: lessonsQuery.isLoading,
+    isRefetching: monthStatsQuery.isRefetching || subjectStatsQuery.isRefetching || lessonsQuery.isRefetching,
     error: monthStatsQuery.error ?? subjectStatsQuery.error,
-    errorExtra: extraQuery.error,
-    refetch: () => Promise.all([monthStatsQuery.refetch(), subjectStatsQuery.refetch(), extraQuery.refetch()]),
+    errorExtra: lessonsQuery.error,
+    refetch: () => Promise.all([monthStatsQuery.refetch(), subjectStatsQuery.refetch(), lessonsQuery.refetch()]),
     hasActiveStudent: enabled,
   };
 }

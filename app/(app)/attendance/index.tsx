@@ -10,7 +10,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { PresenceExtra, PresenceSubjectStats } from '@/src/api/hebe/types/presence';
+import type { Lesson } from '@/src/api/hebe/types/lesson';
+import type { PresenceSubjectStats } from '@/src/api/hebe/types/presence';
 import { useActiveCredential } from '@/src/auth/accountsContext';
 import { useAttendance } from '@/src/data/useAttendance';
 import { useJustifyAbsence } from '@/src/data/useJustifyAbsence';
@@ -28,7 +29,7 @@ function JustifyAbsenceModal({
   onClose,
   onJustified,
 }: {
-  absence: PresenceExtra | null;
+  absence: Lesson | null;
   onClose: () => void;
   onJustified: () => void;
 }) {
@@ -55,7 +56,7 @@ function JustifyAbsenceModal({
 
     try {
       await justify({
-        lessonClassId: absence.IdWeakRef ?? absence.Id,
+        lessonClassId: absence.LessonClassId,
         pupilId: student.Pupil.Id,
         loginId: student.Pupil.LoginId,
         reason: reason.trim(),
@@ -75,6 +76,7 @@ function JustifyAbsenceModal({
           {absence && (
             <Text style={[styles.modalSubtitle, { color: colors.secondaryText }]}>
               {formatHebeDate(absence.DayAt)} · {absence.TimeSlot.Display}
+              {absence.Subject?.Name ? ` · ${absence.Subject.Name}` : ''}
             </Text>
           )}
           <TextInput
@@ -109,7 +111,7 @@ function JustifyAbsenceModal({
 export default function AttendanceScreen() {
   const colors = useThemeColors();
   const [tab, setTab] = useState<SubTab>('subjects');
-  const [justifyTarget, setJustifyTarget] = useState<PresenceExtra | null>(null);
+  const [justifyTarget, setJustifyTarget] = useState<Lesson | null>(null);
   const {
     monthStats,
     subjectStats,
@@ -237,7 +239,7 @@ export default function AttendanceScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {tabBar}
-      <FlatList<PresenceExtra>
+      <FlatList<Lesson>
         style={styles.list}
         data={unexcusedAbsences}
         keyExtractor={(item) => String(item.Id)}
@@ -246,7 +248,10 @@ export default function AttendanceScreen() {
           <Pressable style={[styles.absenceRow, { borderBottomColor: colors.border }]} onPress={() => setJustifyTarget(item)}>
             <View style={styles.absenceInfo}>
               <Text style={[styles.absenceDate, { color: colors.text }]}>{formatHebeDate(item.DayAt)}</Text>
-              <Text style={[styles.absenceHour, { color: colors.secondaryText }]}>{item.TimeSlot.Display}</Text>
+              <Text style={[styles.absenceHour, { color: colors.secondaryText }]}>
+                {item.TimeSlot.Display}
+                {item.Subject?.Name ? ` · ${item.Subject.Name}` : ''}
+              </Text>
             </View>
             <Text style={[styles.justifyLabel, { color: colors.accent }]}>Usprawiedliw</Text>
           </Pressable>
