@@ -22,8 +22,10 @@ export function useMessages(folder: MessageFolder) {
     enabled,
   });
 
+  const messages = [...(query.data ?? [])].sort((a, b) => b.SentAt.localeCompare(a.SentAt));
+
   return {
-    messages: query.data ?? [],
+    messages,
     isLoading: query.isLoading,
     isRefetching: query.isRefetching,
     error: query.error,
