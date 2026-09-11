@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useAccounts } from '@/src/auth/accountsContext';
 import { useThemeColors } from '@/src/ui/theme';
 
@@ -12,7 +12,7 @@ interface Row {
 
 export default function SettingsScreen() {
   const colors = useThemeColors();
-  const { tenants, active, setActive, logout } = useAccounts();
+  const { tenants, active, setActive, hiddenChildren, setChildHidden, logout } = useAccounts();
   const router = useRouter();
 
   const rows: Row[] = tenants.flatMap((t) =>
@@ -68,18 +68,30 @@ export default function SettingsScreen() {
         style={styles.list}
         data={rows}
         keyExtractor={(item) => `${item.tenant}:${item.pupilId}`}
+        ListHeaderComponent={
+          rows.length > 0 ? (
+            <Text style={[styles.sectionHint, { color: colors.secondaryText }]}>
+              Ukryte dzieci znikają z przełącznika u góry ekranu, ale zostają tutaj do ponownego włączenia.
+            </Text>
+          ) : null
+        }
         renderItem={({ item }) => {
           const isActive = active?.tenant === item.tenant && active.pupilId === item.pupilId;
+          const isHidden = hiddenChildren.has(`${item.tenant}:${item.pupilId}`);
           return (
             <Pressable
               style={[styles.row, { borderBottomColor: colors.border }, isActive && { backgroundColor: colors.card }]}
               onPress={() => setActive({ tenant: item.tenant, pupilId: item.pupilId })}
             >
               <View style={styles.rowInfo}>
-                <Text style={[styles.name, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.name, { color: isHidden ? colors.secondaryText : colors.text }]}>{item.label}</Text>
                 <Text style={[styles.school, { color: colors.secondaryText }]}>{item.schoolName}</Text>
               </View>
               {isActive && <Text style={[styles.activeBadge, { color: colors.accent }]}>aktywne</Text>}
+              <Switch
+                value={!isHidden}
+                onValueChange={(visible) => setChildHidden(item.tenant, item.pupilId, !visible)}
+              />
               <Pressable onPress={() => confirmLogout(item.tenant)} hitSlop={12}>
                 <Text style={[styles.removeLabel, { color: colors.danger }]}>Usuń</Text>
               </Pressable>
@@ -102,6 +114,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   logoutAllButton: { padding: 16, alignItems: 'center' },
   logoutAllLabel: { fontWeight: '600' },
+  sectionHint: { fontSize: 12, paddingHorizontal: 16, paddingVertical: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

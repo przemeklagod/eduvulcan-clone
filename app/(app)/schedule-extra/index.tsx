@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View 
 import type { ScheduleExtra } from '@/src/api/hebe/types/schedule';
 import { useScheduleExtra } from '@/src/data/useScheduleExtra';
 import { useThemeColors } from '@/src/ui/theme';
+import { useWeekNavigation, WeekHeader } from '@/src/ui/weekNavigation';
 import { formatHebeDate } from '@/src/utils/dates';
 
 interface DaySection {
@@ -28,7 +29,9 @@ function buildDaySections(items: ScheduleExtra[]): DaySection[] {
 
 export default function ScheduleExtraScreen() {
   const colors = useThemeColors();
-  const { scheduleExtra, isLoading, isRefetching, error, refetch, hasActiveStudent } = useScheduleExtra();
+  const { referenceDate, weekOffset, setWeekOffset, panHandlers } = useWeekNavigation();
+
+  const { scheduleExtra, isLoading, isRefetching, error, refetch, hasActiveStudent } = useScheduleExtra(referenceDate);
   const sections = useMemo(() => buildDaySections(scheduleExtra), [scheduleExtra]);
 
   if (!hasActiveStudent) {
@@ -39,58 +42,57 @@ export default function ScheduleExtraScreen() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={[styles.error, { color: colors.danger }]}>
-          {error instanceof Error ? error.message : 'Błąd ładowania zajęć dodatkowych'}
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <SectionList
-      style={[styles.list, { backgroundColor: colors.background }]}
-      sections={sections}
-      keyExtractor={(item) => String(item.Id)}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-      renderSectionHeader={({ section }) => (
-        <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
-          <Text style={[styles.dayName, { color: colors.text }]}>{formatHebeDate(section.date)}</Text>
-        </View>
-      )}
-      renderItem={({ item }) => (
-        <View style={styles.row}>
-          <Text style={[styles.time, { color: colors.secondaryText }]} numberOfLines={1}>
-            {item.TimeSlot.Display}
-          </Text>
-          <View style={styles.info}>
-            <Text style={[styles.title, { color: colors.text }]}>{item.SchedulePupilDescription || item.ExtraDescription}</Text>
-            <Text style={[styles.details, { color: colors.secondaryText }]}>
-              {item.Teacher.DisplayName} {item.Room ? `· sala ${item.Room.Code}` : ''}
-            </Text>
-          </View>
-        </View>
-      )}
-      ListEmptyComponent={
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <WeekHeader referenceDate={referenceDate} weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
+
+      {isLoading ? (
         <View style={styles.center}>
-          <Text style={{ color: colors.text }}>Brak zajęć dodatkowych w tym okresie.</Text>
+          <ActivityIndicator />
         </View>
-      }
-    />
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={[styles.error, { color: colors.danger }]}>
+            {error instanceof Error ? error.message : 'Błąd ładowania zajęć dodatkowych'}
+          </Text>
+        </View>
+      ) : (
+        <SectionList
+          style={styles.list}
+          sections={sections}
+          keyExtractor={(item) => String(item.Id)}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+          renderSectionHeader={({ section }) => (
+            <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
+              <Text style={[styles.dayName, { color: colors.text }]}>{formatHebeDate(section.date)}</Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <View style={styles.row}>
+              <Text style={[styles.time, { color: colors.secondaryText }]} numberOfLines={1}>
+                {item.TimeSlot.Display}
+              </Text>
+              <View style={styles.info}>
+                <Text style={[styles.title, { color: colors.text }]}>{item.SchedulePupilDescription || item.ExtraDescription}</Text>
+                <Text style={[styles.details, { color: colors.secondaryText }]}>
+                  {item.Teacher.DisplayName} {item.Room ? `· sala ${item.Room.Code}` : ''}
+                </Text>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={{ color: colors.text }}>Brak zajęć dodatkowych w tym tygodniu.</Text>
+            </View>
+          }
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   list: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   error: { textAlign: 'center' },

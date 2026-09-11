@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, PanResponder, Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import type { Schedule } from '@/src/api/hebe/types/schedule';
 import { useSchedule } from '@/src/data/useSchedule';
 import { useThemeColors } from '@/src/ui/theme';
-import { formatHebeDate, formatWeekRangeLabel } from '@/src/utils/dates';
+import { useWeekNavigation, WeekHeader } from '@/src/ui/weekNavigation';
+import { formatHebeDate } from '@/src/utils/dates';
 
 interface DaySection {
   date: string;
@@ -26,46 +27,12 @@ function buildDaySections(lessons: Schedule[]): DaySection[] {
     }));
 }
 
-const SWIPE_MOVE_THRESHOLD = 20;
-const SWIPE_COMMIT_THRESHOLD = 50;
-
 export default function ScheduleScreen() {
   const colors = useThemeColors();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const referenceDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + weekOffset * 7);
-    return d;
-  }, [weekOffset]);
+  const { referenceDate, weekOffset, setWeekOffset, panHandlers } = useWeekNavigation();
 
   const { schedule, isLoading, isRefetching, error, refetch, hasActiveStudent } = useSchedule(referenceDate);
   const sections = useMemo(() => buildDaySections(schedule), [schedule]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.abs(gesture.dx) > SWIPE_MOVE_THRESHOLD && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx <= -SWIPE_COMMIT_THRESHOLD) setWeekOffset((w) => w + 1);
-        else if (gesture.dx >= SWIPE_COMMIT_THRESHOLD) setWeekOffset((w) => w - 1);
-      },
-    })
-  ).current;
-
-  const weekHeader = (
-    <View style={[styles.weekHeader, { borderBottomColor: colors.border }]}>
-      <Pressable style={styles.weekArrow} onPress={() => setWeekOffset((w) => w - 1)} hitSlop={12}>
-        <Text style={[styles.weekArrowLabel, { color: colors.accent }]}>‹</Text>
-      </Pressable>
-      <Pressable onPress={() => setWeekOffset(0)}>
-        <Text style={[styles.weekLabel, { color: colors.text }]}>{formatWeekRangeLabel(referenceDate)}</Text>
-        {weekOffset !== 0 && <Text style={[styles.todayLabel, { color: colors.accent }]}>wróć do dziś</Text>}
-      </Pressable>
-      <Pressable style={styles.weekArrow} onPress={() => setWeekOffset((w) => w + 1)} hitSlop={12}>
-        <Text style={[styles.weekArrowLabel, { color: colors.accent }]}>›</Text>
-      </Pressable>
-    </View>
-  );
 
   if (!hasActiveStudent) {
     return (
@@ -76,8 +43,8 @@ export default function ScheduleScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      {weekHeader}
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <WeekHeader referenceDate={referenceDate} weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
 
       {isLoading ? (
         <View style={styles.center}>
@@ -143,18 +110,6 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   error: { textAlign: 'center' },
-  weekHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  weekArrow: { paddingHorizontal: 16, paddingVertical: 4 },
-  weekArrowLabel: { fontSize: 24, fontWeight: '700' },
-  weekLabel: { fontSize: 15, fontWeight: '700', textAlign: 'center' },
-  todayLabel: { fontSize: 11, textAlign: 'center', marginTop: 2 },
   sectionHeader: { paddingHorizontal: 16, paddingVertical: 8 },
   dayName: { fontWeight: '700', fontSize: 15 },
   lessonRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 12 },

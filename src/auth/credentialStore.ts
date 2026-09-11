@@ -3,6 +3,23 @@ import type { Account } from '../api/hebe/types/account';
 import { deleteSecureJson, getSecureJson, setSecureJson } from './secureJson';
 
 const TENANTS_INDEX_KEY = 'hebe_tenants';
+const HIDDEN_CHILDREN_KEY = 'hebe_hidden_children';
+
+function childKey(tenant: string, pupilId: number): string {
+  return `${tenant}:${pupilId}`;
+}
+
+/** Children hidden from the switcher (top-right badge, default-active selection) - still visible/manageable in Settings. */
+export async function getHiddenChildren(): Promise<string[]> {
+  return (await getSecureJson<string[]>(HIDDEN_CHILDREN_KEY)) ?? [];
+}
+
+export async function setChildHidden(tenant: string, pupilId: number, hidden: boolean): Promise<void> {
+  const key = childKey(tenant, pupilId);
+  const current = await getHiddenChildren();
+  const next = hidden ? [...new Set([...current, key])] : current.filter((k) => k !== key);
+  await setSecureJson(HIDDEN_CHILDREN_KEY, next);
+}
 
 export interface StoredTenant {
   credential: HebeCredential;

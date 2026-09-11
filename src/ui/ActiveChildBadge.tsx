@@ -12,16 +12,18 @@ interface Row {
 
 export function ActiveChildBadge() {
   const colors = useThemeColors();
-  const { tenants, active, setActive } = useAccounts();
+  const { tenants, active, setActive, hiddenChildren } = useAccounts();
   const [open, setOpen] = useState(false);
 
   const rows: Row[] = tenants.flatMap((t) =>
-    t.students.map((s) => ({
-      tenant: t.credential.tenant,
-      pupilId: s.Pupil.Id,
-      label: `${s.Pupil.FirstName} ${s.Pupil.Surname}`,
-      schoolName: s.Unit.DisplayName,
-    }))
+    t.students
+      .filter((s) => !hiddenChildren.has(`${t.credential.tenant}:${s.Pupil.Id}`))
+      .map((s) => ({
+        tenant: t.credential.tenant,
+        pupilId: s.Pupil.Id,
+        label: `${s.Pupil.FirstName} ${s.Pupil.Surname}`,
+        schoolName: s.Unit.DisplayName,
+      }))
   );
 
   if (rows.length === 0) return null;

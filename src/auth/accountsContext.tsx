@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { Platform } from 'react-native';
 import { loginToEduVulcan } from '../api/eduvulcan/login';
 import { registerTenant, refreshStudents } from '../api/hebe/register';
-import { loadAllTenants, removeTenant, saveTenant } from './credentialStore';
+import { getHiddenChildren, loadAllTenants, removeTenant, saveTenant, setChildHidden as storeChildHidden } from './credentialStore';
 import type { StoredTenant } from './credentialStore';
 
 const DEVICE_MODEL = Platform.OS === 'ios' ? 'iPhone' : 'Android Device';
@@ -12,11 +12,17 @@ export interface ActiveSelection {
   pupilId: number;
 }
 
+function childKey(tenant: string, pupilId: number): string {
+  return `${tenant}:${pupilId}`;
+}
+
 interface AccountsContextValue {
   tenants: StoredTenant[];
   loading: boolean;
   active: ActiveSelection | null;
   setActive: (selection: ActiveSelection) => void;
+  hiddenChildren: Set<string>;
+  setChildHidden: (tenant: string, pupilId: number, hidden: boolean) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: (tenant: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -28,15 +34,20 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
   const [tenants, setTenants] = useState<StoredTenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<ActiveSelection | null>(null);
+  const [hiddenChildren, setHiddenChildren] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
-    const loaded = await loadAllTenants();
+    const [loaded, hidden] = await Promise.all([loadAllTenants(), getHiddenChildren()]);
+    const hiddenSet = new Set(hidden);
     setTenants(loaded);
+    setHiddenChildren(hiddenSet);
     setActive((current) => {
       if (current) return current;
-      const first = loaded[0];
-      const firstPupilId = first?.students[0]?.Pupil.Id;
-      return first && firstPupilId !== undefined ? { tenant: first.credential.tenant, pupilId: firstPupilId } : null;
+      for (const t of loaded) {
+        const visible = t.students.find((s) => !hiddenSet.has(childKey(t.credential.tenant, s.Pupil.Id)));
+        if (visible) return { tenant: t.credential.tenant, pupilId: visible.Pupil.Id };
+      }
+      return null;
     });
   }, []);
 
@@ -95,9 +106,45 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
     [refresh]
   );
 
+  const setChildHiddenAndRefresh = useCallback(
+    async (tenant: string, pupilId: number, hidden: boolean) => {
+      await storeChildHidden(tenant, pupilId, hidden);
+      const key = childKey(tenant, pupilId);
+
+      setHiddenChildren((current) => {
+        const next = new Set(current);
+        if (hidden) next.add(key);
+        else next.delete(key);
+
+        // If the currently active child was just hidden, fall back to another visible one.
+        setActive((currentActive) => {
+          if (!hidden || currentActive?.tenant !== tenant || currentActive.pupilId !== pupilId) return currentActive;
+          for (const t of tenants) {
+            const visible = t.students.find((s) => !next.has(childKey(t.credential.tenant, s.Pupil.Id)));
+            if (visible) return { tenant: t.credential.tenant, pupilId: visible.Pupil.Id };
+          }
+          return null;
+        });
+
+        return next;
+      });
+    },
+    [tenants]
+  );
+
   const value = useMemo<AccountsContextValue>(
-    () => ({ tenants, loading, active, setActive, login, logout, refresh }),
-    [tenants, loading, active, login, logout, refresh]
+    () => ({
+      tenants,
+      loading,
+      active,
+      setActive,
+      hiddenChildren,
+      setChildHidden: setChildHiddenAndRefresh,
+      login,
+      logout,
+      refresh,
+    }),
+    [tenants, loading, active, hiddenChildren, setChildHiddenAndRefresh, login, logout, refresh]
   );
 
   return <AccountsContext.Provider value={value}>{children}</AccountsContext.Provider>;
