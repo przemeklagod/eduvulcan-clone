@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { loginToEduVulcan } from '../api/eduvulcan/login';
-import { registerTenant } from '../api/hebe/register';
+import { registerTenant, refreshStudents } from '../api/hebe/register';
 import { loadAllTenants, removeTenant, saveTenant } from './credentialStore';
 import type { StoredTenant } from './credentialStore';
 
@@ -43,6 +43,34 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
+
+  // Silently re-fetch each tenant's student/period data in the background on
+  // every app start - cheap (reuses the existing device credential, no new JWT
+  // registration) and keeps Periods from going stale across a school-year
+  // rollover. Best-effort: a failure here (offline, transient error) just means
+  // the app keeps using whatever was already cached.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const loaded = await loadAllTenants();
+      for (const { credential } of loaded) {
+        try {
+          const students = await refreshStudents(credential);
+          if (cancelled) return;
+          await saveTenant(credential.tenant, credential, students);
+        } catch (e) {
+          console.error(`Failed to refresh students for tenant ${credential.tenant}`, e);
+        }
+      }
+      if (!cancelled) await refresh();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = useCallback(
     async (username: string, password: string) => {

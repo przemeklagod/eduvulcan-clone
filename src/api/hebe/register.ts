@@ -49,3 +49,16 @@ export async function registerTenant(tenant: string, jwts: string[], deviceModel
 
   return { credential, students };
 }
+
+/**
+ * Re-fetches each pupil's account record (Periods, Unit, MessageBox, ...) using
+ * an already-registered device credential - no new RSA keypair or JWT re-registration
+ * needed, since the device certificate itself doesn't expire with the school year.
+ * Periods are only ever fetched once at login otherwise, which goes stale the moment
+ * a new school year starts (the server then rejects the old, cached period ids with
+ * "Selected period is not in current school year") - callers should run this
+ * periodically (e.g. on app start) to keep stored student data current.
+ */
+export async function refreshStudents(credential: HebeCredential): Promise<Account[]> {
+  return hebeGet<Account[]>(credential, 'mobile/register/hebe', { mode: 2 });
+}
