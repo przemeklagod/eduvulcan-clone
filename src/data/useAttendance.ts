@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { getCompletedLessons } from '../api/hebe/endpoints/lessons';
 import { getPresenceMonthStats, getPresenceSubjectStats } from '../api/hebe/endpoints/presence';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
 import { formatDateForApi } from '../utils/dates';
+import { useLibrusAttendance } from './useLibrusAttendance';
 
 // Inactive/historical enrollments (e.g. a school the pupil no longer attends)
 // can come back with Periods: null instead of [] - guard against that.
@@ -10,7 +11,7 @@ function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }> | 
   return periods?.find((p) => p.Current)?.Id ?? periods?.[0]?.Id;
 }
 
-export function useAttendance() {
+function useVulcanAttendance() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const periods = student?.Periods ?? [];
@@ -67,4 +68,12 @@ export function useAttendance() {
     refetch: () => Promise.all([monthStatsQuery.refetch(), subjectStatsQuery.refetch(), lessonsQuery.refetch()]),
     hasActiveStudent: enabled,
   };
+}
+
+export function useAttendance() {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanAttendance();
+  const librusResult = useLibrusAttendance();
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getDeletedMessages, getReceivedMessages, getSentMessages } from '../api/hebe/endpoints/messages';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
+import { useLibrusMessages } from './useLibrusMessages';
 
 export type MessageFolder = 'received' | 'sent' | 'deleted';
 
@@ -10,7 +11,7 @@ const FETCHERS = {
   deleted: getDeletedMessages,
 } as const;
 
-export function useMessages(folder: MessageFolder) {
+function useVulcanMessages(folder: MessageFolder) {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const box = student?.MessageBox?.GlobalKey;
@@ -32,4 +33,12 @@ export function useMessages(folder: MessageFolder) {
     refetch: query.refetch,
     hasActiveStudent: enabled,
   };
+}
+
+export function useMessages(folder: MessageFolder) {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanMessages(folder);
+  const librusResult = useLibrusMessages(folder);
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

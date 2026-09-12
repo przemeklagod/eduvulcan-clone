@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { getSchedule } from '../api/hebe/endpoints/schedule';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
 import { getWeekRange } from '../utils/dates';
+import { useLibrusSchedule } from './useLibrusSchedule';
 
-export function useSchedule(referenceDate: Date = new Date()) {
+function useVulcanSchedule(referenceDate: Date) {
   const activeInfo = useActiveCredential();
   const { dateFrom, dateTo } = getWeekRange(referenceDate);
   const enabled = Boolean(activeInfo);
@@ -22,4 +23,12 @@ export function useSchedule(referenceDate: Date = new Date()) {
     refetch: query.refetch,
     hasActiveStudent: enabled,
   };
+}
+
+export function useSchedule(referenceDate: Date = new Date()) {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanSchedule(referenceDate);
+  const librusResult = useLibrusSchedule(referenceDate);
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

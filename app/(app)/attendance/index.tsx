@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import type { Lesson } from '@/src/api/hebe/types/lesson';
 import type { PresenceSubjectStats } from '@/src/api/hebe/types/presence';
-import { useActiveCredential } from '@/src/auth/accountsContext';
+import { useAccounts, useActiveCredential } from '@/src/auth/accountsContext';
 import { useAttendance } from '@/src/data/useAttendance';
 import { useJustifyAbsence } from '@/src/data/useJustifyAbsence';
 import { useThemeColors } from '@/src/ui/theme';
@@ -110,6 +110,11 @@ function JustifyAbsenceModal({
 
 export default function AttendanceScreen() {
   const colors = useThemeColors();
+  const { active } = useAccounts();
+  // Absence justification isn't implemented for Librus yet (a separate,
+  // not-yet-built auth/endpoint story) - rows are shown read-only rather
+  // than opening a modal that would silently do nothing on submit.
+  const canJustify = active?.provider !== 'librus';
   const [tab, setTab] = useState<SubTab>('subjects');
   const [justifyTarget, setJustifyTarget] = useState<Lesson | null>(null);
   const {
@@ -245,7 +250,10 @@ export default function AttendanceScreen() {
         keyExtractor={(item) => String(item.Id)}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         renderItem={({ item }) => (
-          <Pressable style={[styles.absenceRow, { borderBottomColor: colors.border }]} onPress={() => setJustifyTarget(item)}>
+          <Pressable
+            style={[styles.absenceRow, { borderBottomColor: colors.border }]}
+            onPress={canJustify ? () => setJustifyTarget(item) : undefined}
+          >
             <View style={styles.absenceInfo}>
               <Text style={[styles.absenceDate, { color: colors.text }]}>{formatHebeDate(item.DayAt)}</Text>
               <Text style={[styles.absenceHour, { color: colors.secondaryText }]}>
@@ -253,7 +261,7 @@ export default function AttendanceScreen() {
                 {item.Subject?.Name ? ` · ${item.Subject.Name}` : ''}
               </Text>
             </View>
-            <Text style={[styles.justifyLabel, { color: colors.accent }]}>Usprawiedliw</Text>
+            {canJustify && <Text style={[styles.justifyLabel, { color: colors.accent }]}>Usprawiedliw</Text>}
           </Pressable>
         )}
         ListEmptyComponent={

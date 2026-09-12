@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { Message } from '@/src/api/hebe/types/message';
-import { useActiveCredential } from '@/src/auth/accountsContext';
+import { useAccounts, useActiveCredential } from '@/src/auth/accountsContext';
 import { useMessages, type MessageFolder } from '@/src/data/useMessages';
 import { ComposeMessageModal, type ComposeTarget } from '@/src/ui/ComposeMessageModal';
 import { useThemeColors } from '@/src/ui/theme';
@@ -16,10 +16,15 @@ const FOLDERS: { key: MessageFolder; label: string }[] = [
 
 export default function MessagesScreen() {
   const colors = useThemeColors();
+  const { active } = useAccounts();
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const myBoxKey = student?.MessageBox?.GlobalKey;
   const myBoxName = student?.MessageBox?.Name;
+  // Librus only exposes an inbox via the wiadomosci.librus.pl bridge - no
+  // sent/deleted folders and no sending, unlike Vulcan's full message API.
+  const isLibrus = active?.provider === 'librus';
+  const folders = isLibrus ? FOLDERS.filter((f) => f.key === 'received') : FOLDERS;
 
   const [folder, setFolder] = useState<MessageFolder>('received');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -30,7 +35,7 @@ export default function MessagesScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <View style={styles.tabBar}>
-          {FOLDERS.map((f) => (
+          {folders.map((f) => (
             <Pressable key={f.key} style={[styles.tab, folder === f.key && { borderBottomWidth: 2, borderBottomColor: colors.accent }]} onPress={() => setFolder(f.key)}>
               <Text style={[styles.tabLabel, { color: folder === f.key ? colors.accent : colors.secondaryText }, folder === f.key && styles.tabLabelActive]}>
                 {f.label}
@@ -38,7 +43,7 @@ export default function MessagesScreen() {
             </Pressable>
           ))}
         </View>
-        {myBoxKey && myBoxName && (
+        {!isLibrus && myBoxKey && myBoxName && (
           <Pressable style={styles.newButton} onPress={() => setComposeTarget({ boxKey: myBoxKey, senderName: myBoxName })}>
             <Text style={[styles.newButtonLabel, { color: colors.accent }]}>Nowa wiadomość</Text>
           </Pressable>
@@ -85,7 +90,7 @@ export default function MessagesScreen() {
                     <Text style={[styles.content, { color: colors.text }]} selectable>
                       {htmlToPlainText(item.Content)}
                     </Text>
-                    {myBoxKey && myBoxName && folder === 'received' && (
+                    {!isLibrus && myBoxKey && myBoxName && folder === 'received' && (
                       <Pressable
                         style={styles.replyButton}
                         onPress={() =>
