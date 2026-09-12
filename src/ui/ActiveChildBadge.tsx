@@ -1,34 +1,56 @@
 import { useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAccounts } from '../auth/accountsContext';
+import type { ActiveSelection } from '../auth/accountsContext';
+import { librusChildKey } from '../auth/credentialStore';
 import { useThemeColors } from './theme';
 
 interface Row {
-  tenant: string;
-  pupilId: number;
+  key: string;
+  selection: ActiveSelection;
   label: string;
   schoolName: string;
 }
 
+function isSameSelection(a: ActiveSelection | null, b: ActiveSelection): boolean {
+  if (!a || a.provider !== b.provider) return false;
+  if (a.provider === 'vulcan' && b.provider === 'vulcan') return a.tenant === b.tenant && a.pupilId === b.pupilId;
+  if (a.provider === 'librus' && b.provider === 'librus') return a.portalEmail === b.portalEmail && a.childId === b.childId;
+  return false;
+}
+
 export function ActiveChildBadge() {
   const colors = useThemeColors();
-  const { tenants, active, setActive, hiddenChildren } = useAccounts();
+  const { tenants, librusAccounts, active, setActive, hiddenChildren } = useAccounts();
   const [open, setOpen] = useState(false);
 
-  const rows: Row[] = tenants.flatMap((t) =>
+  const vulcanRows: Row[] = tenants.flatMap((t) =>
     t.students
       .filter((s) => !hiddenChildren.has(`${t.credential.tenant}:${s.Pupil.Id}`))
       .map((s) => ({
-        tenant: t.credential.tenant,
-        pupilId: s.Pupil.Id,
+        key: `vulcan:${t.credential.tenant}:${s.Pupil.Id}`,
+        selection: { provider: 'vulcan' as const, tenant: t.credential.tenant, pupilId: s.Pupil.Id },
         label: `${s.Pupil.FirstName} ${s.Pupil.Surname}`,
         schoolName: s.Unit.DisplayName,
       }))
   );
 
+  const librusRows: Row[] = librusAccounts.flatMap((a) =>
+    a.children
+      .filter((c) => !hiddenChildren.has(librusChildKey(c.id)))
+      .map((c) => ({
+        key: `librus:${a.portalEmail}:${c.id}`,
+        selection: { provider: 'librus' as const, portalEmail: a.portalEmail, childId: c.id },
+        label: c.studentName,
+        schoolName: 'Librus',
+      }))
+  );
+
+  const rows = [...vulcanRows, ...librusRows];
+
   if (rows.length === 0) return null;
 
-  const activeRow = rows.find((r) => r.tenant === active?.tenant && r.pupilId === active?.pupilId);
+  const activeRow = rows.find((r) => isSameSelection(active, r.selection));
 
   return (
     <>
@@ -45,14 +67,14 @@ export function ActiveChildBadge() {
             <Text style={[styles.sheetTitle, { color: colors.secondaryText }]}>Wybierz dziecko</Text>
             <FlatList<Row>
               data={rows}
-              keyExtractor={(item) => `${item.tenant}:${item.pupilId}`}
+              keyExtractor={(item) => item.key}
               renderItem={({ item }) => {
-                const isActive = item.tenant === active?.tenant && item.pupilId === active?.pupilId;
+                const isActive = isSameSelection(active, item.selection);
                 return (
                   <Pressable
                     style={[styles.row, { borderBottomColor: colors.border }, isActive && { backgroundColor: colors.card }]}
                     onPress={() => {
-                      setActive({ tenant: item.tenant, pupilId: item.pupilId });
+                      setActive(item.selection);
                       setOpen(false);
                     }}
                   >

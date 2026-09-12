@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { useAccounts } from '@/src/auth/accountsContext';
 
-export default function LoginScreen() {
-  const { login } = useAccounts();
+export default function LibrusLoginScreen() {
+  const { loginLibrus } = useAccounts();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const colors = {
@@ -23,7 +23,7 @@ export default function LoginScreen() {
     placeholder: isDark ? '#888' : '#999',
   };
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -33,7 +33,7 @@ export default function LoginScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(username.trim(), password);
+      await loginLibrus(email.trim(), password);
       router.replace('/(app)/grades');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Logowanie nie powiodło się');
@@ -47,16 +47,20 @@ export default function LoginScreen() {
       contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={[styles.title, { color: colors.text }]}>eduVulcan</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Librus Synergia</Text>
+      <Text style={[styles.subtitle, { color: colors.placeholder }]}>
+        Zaloguj się danymi konta rodzica z portalu Librus Synergia.
+      </Text>
 
       <TextInput
         style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-        placeholder="Login"
+        placeholder="E-mail"
         placeholderTextColor={colors.placeholder}
         autoCapitalize="none"
         autoCorrect={false}
-        value={username}
-        onChangeText={setUsername}
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
         editable={!submitting}
       />
       <View style={styles.passwordRow}>
@@ -76,22 +80,19 @@ export default function LoginScreen() {
         </Pressable>
       </View>
 
-      <Pressable style={styles.button} onPress={onSubmit} disabled={submitting || !username || !password}>
+      <Pressable style={styles.button} onPress={onSubmit} disabled={submitting || !email || !password}>
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Zaloguj</Text>}
       </Pressable>
 
       {error && <Text style={styles.error} selectable>{error}</Text>}
-
-      <Pressable style={styles.librusLink} onPress={() => router.push('/(auth)/librus-login')}>
-        <Text style={styles.librusLinkText}>Dodaj konto Librus</Text>
-      </Pressable>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
+  title: { fontSize: 28, fontWeight: '700', marginBottom: 4, textAlign: 'center' },
+  subtitle: { fontSize: 13, textAlign: 'center', marginBottom: 20 },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },
   passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   passwordInput: { flex: 1 },
@@ -100,6 +101,4 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#2f6fed', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   error: { color: '#d33', textAlign: 'left', fontSize: 12, marginTop: 16 },
-  librusLink: { alignItems: 'center', marginTop: 24, padding: 8 },
-  librusLinkText: { color: '#2f6fed', fontWeight: '600' },
 });

@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { getGradeAverages, getGradeSummary, getGrades } from '../api/hebe/endpoints/grades';
 import type { GradeSummary } from '../api/hebe/types/grade';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
+import { useLibrusGrades } from './useLibrusGrades';
 
 // Inactive/historical enrollments (e.g. a school the pupil no longer attends)
 // can come back with Periods: null instead of [] - guard against that.
@@ -9,7 +10,7 @@ function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }> | 
   return periods?.find((p) => p.Current)?.Id ?? periods?.[0]?.Id;
 }
 
-export function useGrades() {
+function useVulcanGrades() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const periods = student?.Periods ?? [];
@@ -56,4 +57,15 @@ export function useGrades() {
     isRefetching: gradesQuery.isRefetching || averagesQuery.isRefetching,
     hasActiveStudent: enabled,
   };
+}
+
+export function useGrades() {
+  const { active } = useAccounts();
+  // Both branches are called unconditionally (Rules of Hooks) - whichever one
+  // isn't the active provider just stays disabled/empty via its own
+  // useActiveCredential()/useActiveLibrusChild() returning null.
+  const vulcanResult = useVulcanGrades();
+  const librusResult = useLibrusGrades();
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

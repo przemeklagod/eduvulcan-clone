@@ -2,15 +2,25 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { Platform } from 'react-native';
 import { loginToEduVulcan } from '../api/eduvulcan/login';
 import { registerTenant, refreshStudents } from '../api/hebe/register';
-import { getHiddenChildren, loadAllTenants, removeTenant, saveTenant, setChildHidden as storeChildHidden } from './credentialStore';
-import type { StoredTenant } from './credentialStore';
+import { getSynergiaAccounts, loginToLibrusPortal } from '../api/librus/auth';
+import {
+  getHiddenChildren,
+  librusChildKey,
+  loadAllLibrusAccounts,
+  loadAllTenants,
+  removeLibrusAccount,
+  removeTenant,
+  saveLibrusAccount,
+  saveTenant,
+  setChildHidden as storeChildHidden,
+} from './credentialStore';
+import type { StoredLibrusAccount, StoredTenant } from './credentialStore';
 
 const DEVICE_MODEL = Platform.OS === 'ios' ? 'iPhone' : 'Android Device';
 
-export interface ActiveSelection {
-  tenant: string;
-  pupilId: number;
-}
+export type ActiveSelection =
+  | { provider: 'vulcan'; tenant: string; pupilId: number }
+  | { provider: 'librus'; portalEmail: string; childId: number };
 
 function childKey(tenant: string, pupilId: number): string {
   return `${tenant}:${pupilId}`;
@@ -18,13 +28,16 @@ function childKey(tenant: string, pupilId: number): string {
 
 interface AccountsContextValue {
   tenants: StoredTenant[];
+  librusAccounts: StoredLibrusAccount[];
   loading: boolean;
   active: ActiveSelection | null;
   setActive: (selection: ActiveSelection) => void;
   hiddenChildren: Set<string>;
-  setChildHidden: (tenant: string, pupilId: number, hidden: boolean) => Promise<void>;
+  setChildHidden: (key: string, hidden: boolean) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: (tenant: string) => Promise<void>;
+  loginLibrus: (email: string, password: string) => Promise<void>;
+  logoutLibrus: (portalEmail: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -32,20 +45,30 @@ const AccountsContext = createContext<AccountsContextValue | null>(null);
 
 export function AccountsProvider({ children }: { children: React.ReactNode }) {
   const [tenants, setTenants] = useState<StoredTenant[]>([]);
+  const [librusAccounts, setLibrusAccounts] = useState<StoredLibrusAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<ActiveSelection | null>(null);
   const [hiddenChildren, setHiddenChildren] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
-    const [loaded, hidden] = await Promise.all([loadAllTenants(), getHiddenChildren()]);
+    const [loaded, librusLoaded, hidden] = await Promise.all([
+      loadAllTenants(),
+      loadAllLibrusAccounts(),
+      getHiddenChildren(),
+    ]);
     const hiddenSet = new Set(hidden);
     setTenants(loaded);
+    setLibrusAccounts(librusLoaded);
     setHiddenChildren(hiddenSet);
     setActive((current) => {
       if (current) return current;
       for (const t of loaded) {
         const visible = t.students.find((s) => !hiddenSet.has(childKey(t.credential.tenant, s.Pupil.Id)));
-        if (visible) return { tenant: t.credential.tenant, pupilId: visible.Pupil.Id };
+        if (visible) return { provider: 'vulcan', tenant: t.credential.tenant, pupilId: visible.Pupil.Id };
+      }
+      for (const a of librusLoaded) {
+        const visible = a.children.find((c) => !hiddenSet.has(librusChildKey(c.id)));
+        if (visible) return { provider: 'librus', portalEmail: a.portalEmail, childId: visible.id };
       }
       return null;
     });
@@ -55,11 +78,13 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
 
-  // Silently re-fetch each tenant's student/period data in the background on
-  // every app start - cheap (reuses the existing device credential, no new JWT
-  // registration) and keeps Periods from going stale across a school-year
-  // rollover. Best-effort: a failure here (offline, transient error) just means
-  // the app keeps using whatever was already cached.
+  // Silently re-fetch each Vulcan tenant's student/period data in the
+  // background on every app start - cheap (reuses the existing device
+  // credential, no new JWT registration) and keeps Periods from going stale
+  // across a school-year rollover. Best-effort: a failure here (offline,
+  // transient error) just means the app keeps using whatever was cached.
+  // (Librus bearer-token refresh is a separate, not-yet-implemented concern -
+  // see the Librus integration plan.)
   useEffect(() => {
     let cancelled = false;
 
@@ -100,16 +125,34 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(
     async (tenant: string) => {
       await removeTenant(tenant);
-      setActive((current) => (current?.tenant === tenant ? null : current));
+      setActive((current) => (current?.provider === 'vulcan' && current.tenant === tenant ? null : current));
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const loginLibrus = useCallback(
+    async (email: string, password: string) => {
+      await loginToLibrusPortal(email, password);
+      const { accounts } = await getSynergiaAccounts();
+      await saveLibrusAccount(email, password, accounts);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const logoutLibrus = useCallback(
+    async (portalEmail: string) => {
+      await removeLibrusAccount(portalEmail);
+      setActive((current) => (current?.provider === 'librus' && current.portalEmail === portalEmail ? null : current));
       await refresh();
     },
     [refresh]
   );
 
   const setChildHiddenAndRefresh = useCallback(
-    async (tenant: string, pupilId: number, hidden: boolean) => {
-      await storeChildHidden(tenant, pupilId, hidden);
-      const key = childKey(tenant, pupilId);
+    async (key: string, hidden: boolean) => {
+      await storeChildHidden(key, hidden);
 
       setHiddenChildren((current) => {
         const next = new Set(current);
@@ -118,10 +161,20 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
 
         // If the currently active child was just hidden, fall back to another visible one.
         setActive((currentActive) => {
-          if (!hidden || currentActive?.tenant !== tenant || currentActive.pupilId !== pupilId) return currentActive;
+          if (!hidden || !currentActive) return currentActive;
+          const currentKey =
+            currentActive.provider === 'vulcan'
+              ? childKey(currentActive.tenant, currentActive.pupilId)
+              : librusChildKey(currentActive.childId);
+          if (currentKey !== key) return currentActive;
+
           for (const t of tenants) {
             const visible = t.students.find((s) => !next.has(childKey(t.credential.tenant, s.Pupil.Id)));
-            if (visible) return { tenant: t.credential.tenant, pupilId: visible.Pupil.Id };
+            if (visible) return { provider: 'vulcan', tenant: t.credential.tenant, pupilId: visible.Pupil.Id };
+          }
+          for (const a of librusAccounts) {
+            const visible = a.children.find((c) => !next.has(librusChildKey(c.id)));
+            if (visible) return { provider: 'librus', portalEmail: a.portalEmail, childId: visible.id };
           }
           return null;
         });
@@ -129,12 +182,13 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     },
-    [tenants]
+    [tenants, librusAccounts]
   );
 
   const value = useMemo<AccountsContextValue>(
     () => ({
       tenants,
+      librusAccounts,
       loading,
       active,
       setActive,
@@ -142,9 +196,11 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
       setChildHidden: setChildHiddenAndRefresh,
       login,
       logout,
+      loginLibrus,
+      logoutLibrus,
       refresh,
     }),
-    [tenants, loading, active, hiddenChildren, setChildHiddenAndRefresh, login, logout, refresh]
+    [tenants, librusAccounts, loading, active, hiddenChildren, setChildHiddenAndRefresh, login, logout, loginLibrus, logoutLibrus, refresh]
   );
 
   return <AccountsContext.Provider value={value}>{children}</AccountsContext.Provider>;
@@ -156,9 +212,15 @@ export function useAccounts(): AccountsContextValue {
   return ctx;
 }
 
+/**
+ * Vulcan-only - returns null (not an error) when the active selection is a
+ * Librus child, so every existing Vulcan-specific data hook keeps working
+ * completely unchanged and just renders its "no active student" empty state
+ * for a Librus-backed child.
+ */
 export function useActiveCredential() {
   const { tenants, active } = useAccounts();
-  if (!active) return null;
+  if (!active || active.provider !== 'vulcan') return null;
   const stored = tenants.find((t) => t.credential.tenant === active.tenant);
   if (!stored) return null;
 
@@ -170,4 +232,16 @@ export function useActiveCredential() {
   const credential = student ? { ...stored.credential, restUrl: student.Unit.RestURL } : stored.credential;
 
   return { credential, pupilId: active.pupilId, students: stored.students };
+}
+
+/** Librus counterpart to useActiveCredential() - null unless the active selection is a Librus child. */
+export function useActiveLibrusChild() {
+  const { librusAccounts, active } = useAccounts();
+  if (!active || active.provider !== 'librus') return null;
+  const account = librusAccounts.find((a) => a.portalEmail === active.portalEmail);
+  if (!account) return null;
+  const child = account.children.find((c) => c.id === active.childId);
+  if (!child) return null;
+
+  return { portalEmail: account.portalEmail, portalPassword: account.portalPassword, child };
 }
