@@ -121,6 +121,14 @@ export interface LibrusUser {
   LastName: string;
 }
 
+/** A resolved lesson occurrence - unlike Timetable entries (which only cover the current/a given week), this resolves any Lesson.Id directly, which is what Attendances/Grades reference. */
+export interface LibrusLesson {
+  Id: number;
+  Teacher: ApiRef;
+  Subject: ApiRef;
+  Class: ApiRef;
+}
+
 /** wiadomosci.librus.pl list item - `content` is base64, truncated to a preview (full text needs the detail call). */
 export interface LibrusWiadomosciListItem {
   messageId: string;

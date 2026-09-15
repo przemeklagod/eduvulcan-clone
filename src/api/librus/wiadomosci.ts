@@ -4,7 +4,14 @@ const MOBILE_UA = 'Librus Mobile/6.0.0 (iPhone; iOS 17.0)';
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 const WIADOMOSCI_BASE_URL = 'https://wiadomosci.librus.pl';
 
-export class LibrusWiadomosciError extends Error {}
+export class LibrusWiadomosciError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number
+  ) {
+    super(message);
+  }
+}
 
 async function requestAutoLoginToken(accessToken: string): Promise<string> {
   const response = await fetch('https://api.librus.pl/2.0/AutoLoginToken', {
@@ -13,7 +20,14 @@ async function requestAutoLoginToken(accessToken: string): Promise<string> {
     cache: 'no-store',
   });
   if (!response.ok) {
-    throw new LibrusWiadomosciError(`Nie udało się uzyskać tokenu logowania do wiadomości Librus (HTTP ${response.status})`);
+    // The 401 here is what a stale/expired child access token looks like -
+    // this is the only step in the bridge that's actually authenticated by
+    // it (the rest rides on the resulting cookie session), so this is where
+    // callers should catch it and refresh the token.
+    throw new LibrusWiadomosciError(
+      `Nie udało się uzyskać tokenu logowania do wiadomości Librus (HTTP ${response.status})`,
+      response.status
+    );
   }
   const json = (await response.json()) as { Token?: string };
   if (!json.Token) throw new LibrusWiadomosciError('Brak tokenu logowania w odpowiedzi Librusa');

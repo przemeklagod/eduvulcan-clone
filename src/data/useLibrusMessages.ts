@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getInboxMessagesAdapted } from '../api/librus/adapters/messages';
-import { useActiveLibrusChild } from '../auth/accountsContext';
 import type { MessageFolder } from './useMessages';
+import { useLibrusQuery } from './useLibrusQuery';
 
 /**
  * Librus counterpart to useMessages() - same return shape so messages/index.tsx
@@ -9,12 +9,12 @@ import type { MessageFolder } from './useMessages';
  * sent/deleted folder API (inbox-only), so other folders return empty.
  */
 export function useLibrusMessages(folder: MessageFolder) {
-  const activeChild = useActiveLibrusChild();
+  const { activeChild, run } = useLibrusQuery();
   const enabled = Boolean(activeChild) && folder === 'received';
 
   const query = useQuery({
     queryKey: ['librusMessages', activeChild?.child.id],
-    queryFn: () => getInboxMessagesAdapted(activeChild!.child.accessToken),
+    queryFn: () => run(getInboxMessagesAdapted),
     enabled,
   });
 

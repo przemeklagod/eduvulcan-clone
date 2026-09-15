@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { getScheduleAdapted } from '../api/librus/adapters/schedule';
-import { useActiveLibrusChild } from '../auth/accountsContext';
 import { getWeekRange } from '../utils/dates';
+import { useLibrusQuery } from './useLibrusQuery';
 
 /** Librus counterpart to useSchedule() - same return shape so schedule/index.tsx needs no changes. */
 export function useLibrusSchedule(referenceDate: Date = new Date()) {
-  const activeChild = useActiveLibrusChild();
+  const { activeChild, run } = useLibrusQuery();
   const { dateFrom } = getWeekRange(referenceDate);
   const enabled = Boolean(activeChild);
 
   const query = useQuery({
     queryKey: ['librusSchedule', activeChild?.child.id, dateFrom],
-    queryFn: () => getScheduleAdapted(activeChild!.child.accessToken, dateFrom),
+    queryFn: () => run((token) => getScheduleAdapted(token, dateFrom)),
     enabled,
   });
 

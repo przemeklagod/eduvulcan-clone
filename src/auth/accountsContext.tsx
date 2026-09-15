@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { loginToEduVulcan } from '../api/eduvulcan/login';
 import { registerTenant, refreshStudents } from '../api/hebe/register';
 import { getSynergiaAccounts, loginToLibrusPortal } from '../api/librus/auth';
+import type { LibrusChildAccount } from '../api/librus/types';
 import {
   getHiddenChildren,
   librusChildKey,
@@ -38,6 +39,8 @@ interface AccountsContextValue {
   logout: (tenant: string) => Promise<void>;
   loginLibrus: (email: string, password: string) => Promise<void>;
   logoutLibrus: (portalEmail: string) => Promise<void>;
+  /** Re-logs into the Librus portal with the stored password and persists fresh bearer tokens for every child under that account (one portal login covers the whole family). */
+  refreshLibrusToken: (portalEmail: string) => Promise<LibrusChildAccount[]>;
   refresh: () => Promise<void>;
 }
 
@@ -150,6 +153,20 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
     [refresh]
   );
 
+  const refreshLibrusToken = useCallback(
+    async (portalEmail: string): Promise<LibrusChildAccount[]> => {
+      const account = librusAccounts.find((a) => a.portalEmail === portalEmail);
+      if (!account) throw new Error(`Nie znaleziono zapisanego konta Librus dla ${portalEmail}`);
+
+      await loginToLibrusPortal(portalEmail, account.portalPassword);
+      const { accounts } = await getSynergiaAccounts();
+      await saveLibrusAccount(portalEmail, account.portalPassword, accounts);
+      await refresh();
+      return accounts;
+    },
+    [librusAccounts, refresh]
+  );
+
   const setChildHiddenAndRefresh = useCallback(
     async (key: string, hidden: boolean) => {
       await storeChildHidden(key, hidden);
@@ -198,9 +215,23 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
       logout,
       loginLibrus,
       logoutLibrus,
+      refreshLibrusToken,
       refresh,
     }),
-    [tenants, librusAccounts, loading, active, hiddenChildren, setChildHiddenAndRefresh, login, logout, loginLibrus, logoutLibrus, refresh]
+    [
+      tenants,
+      librusAccounts,
+      loading,
+      active,
+      hiddenChildren,
+      setChildHiddenAndRefresh,
+      login,
+      logout,
+      loginLibrus,
+      logoutLibrus,
+      refreshLibrusToken,
+      refresh,
+    ]
   );
 
   return <AccountsContext.Provider value={value}>{children}</AccountsContext.Provider>;

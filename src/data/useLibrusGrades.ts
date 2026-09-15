@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getGradesAdapted } from '../api/librus/adapters/grades';
-import { useActiveLibrusChild } from '../auth/accountsContext';
+import { useLibrusQuery } from './useLibrusQuery';
 
 /**
  * Librus counterpart to useGrades() - same return shape so grades/index.tsx
@@ -9,12 +9,12 @@ import { useActiveLibrusChild } from '../auth/accountsContext';
  * first Librus screen).
  */
 export function useLibrusGrades() {
-  const activeChild = useActiveLibrusChild();
+  const { activeChild, run } = useLibrusQuery();
   const enabled = Boolean(activeChild);
 
   const query = useQuery({
     queryKey: ['librusGrades', activeChild?.child.id],
-    queryFn: () => getGradesAdapted(activeChild!.child.accessToken),
+    queryFn: () => run(getGradesAdapted),
     enabled,
   });
 

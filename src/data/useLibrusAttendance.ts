@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAttendanceAdapted } from '../api/librus/adapters/attendance';
-import { useActiveLibrusChild } from '../auth/accountsContext';
+import { useLibrusQuery } from './useLibrusQuery';
 
 /** Librus counterpart to useAttendance() - same return shape so attendance/index.tsx needs no changes. */
 export function useLibrusAttendance() {
-  const activeChild = useActiveLibrusChild();
+  const { activeChild, run } = useLibrusQuery();
   const enabled = Boolean(activeChild);
 
   const query = useQuery({
     queryKey: ['librusAttendance', activeChild?.child.id],
-    queryFn: () => getAttendanceAdapted(activeChild!.child.accessToken),
+    queryFn: () => run(getAttendanceAdapted),
     enabled,
   });
 

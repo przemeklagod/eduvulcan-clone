@@ -1,4 +1,5 @@
-import { getLibrusAttendances, getLibrusAttendanceTypes } from '../endpoints/attendance';
+import { getLibrusAttendances, getLibrusAttendanceTypes, getLibrusLesson } from '../endpoints/attendance';
+import { getLibrusSubjects } from '../endpoints/grades';
 import type { LibrusAttendance, LibrusAttendanceType } from '../types';
 import type { Lesson } from '../../hebe/types/lesson';
 import type { PresenceMonthStats, PresenceSubjectStats } from '../../hebe/types/presence';
@@ -20,6 +21,16 @@ function standardIdOf(type: LibrusAttendanceType | undefined): number | undefine
   return type.Standard ? type.Id : type.StandardType ? Number(type.StandardType.Id) : type.Id;
 }
 
+interface SubjectAggregate {
+  name: string;
+  total: number;
+  present: number;
+  absences: number;
+  absencesJustified: number;
+  lateArrivals: number;
+  exemptions: number;
+}
+
 export interface LibrusAttendanceAdapted {
   monthStats: PresenceMonthStats[];
   subjectStats: PresenceSubjectStats[];
@@ -30,15 +41,35 @@ export interface LibrusAttendanceAdapted {
  * Librus's /Attendances has no date-range params - it returns the whole
  * semester to date, so there's no real "per month" breakdown to compute;
  * this produces a single school-year-to-date aggregate instead (the screen
- * only ever reads the last monthStats entry as "overall"). Per-subject
- * breakdown (subjectStats) is left empty: resolving it would require
- * fetching every historical week's Timetable to map Attendance.Lesson.Id -&gt;
- * Subject (Lesson ids are per-occurrence, not stable across weeks) - a
- * follow-up, not blocking this phase.
+ * only ever reads the last monthStats entry as "overall").
+ *
+ * Per-subject stats need an Attendance.Lesson.Id -> Subject lookup, which
+ * Attendances themselves don't carry. An earlier version tried to build this
+ * from a week's /Timetables (which does have inline Subject names), but that
+ * only resolved ~20% of lesson ids live - the weekly timetable view doesn't
+ * reliably list every lesson occurrence. /Lessons/{id} resolves any lesson
+ * directly and matched 100% in testing, so this fetches one per distinct
+ * Lesson.Id referenced by the attendance list instead (grows with the
+ * number of distinct lessons over the year, not with attendance count).
  */
 export async function getAttendanceAdapted(accessToken: string): Promise<LibrusAttendanceAdapted> {
   const [attendances, types] = await Promise.all([getLibrusAttendances(accessToken), getLibrusAttendanceTypes(accessToken)]);
   const typeById = new Map(types.map((t) => [String(t.Id), t]));
+
+  const uniqueLessonIds = [...new Set(attendances.map((a) => String(a.Lesson.Id)))];
+  const [lessons, subjects] = await Promise.all([
+    Promise.all(uniqueLessonIds.map((id) => getLibrusLesson(accessToken, id).catch(() => null))),
+    getLibrusSubjects(accessToken),
+  ]);
+  const subjectNameById = new Map(subjects.map((s) => [String(s.Id), s.Name]));
+
+  const subjectByLessonId = new Map<string, { Id: number; Name: string }>();
+  uniqueLessonIds.forEach((lessonId, i) => {
+    const lesson = lessons[i];
+    if (!lesson) return;
+    const subjectId = String(lesson.Subject.Id);
+    subjectByLessonId.set(lessonId, { Id: Number(subjectId), Name: subjectNameById.get(subjectId) ?? 'Przedmiot' });
+  });
 
   let presentCount = 0;
   let absences = 0;
@@ -46,29 +77,50 @@ export async function getAttendanceAdapted(accessToken: string): Promise<LibrusA
   let lateArrivals = 0;
   let exemptions = 0;
   const unexcusedAbsences: Lesson[] = [];
+  const bySubject = new Map<number, SubjectAggregate>();
 
   for (const a of attendances) {
     const type = typeById.get(String(a.Type.Id));
     const standardId = standardIdOf(type);
+    const isPresent = Boolean(type?.IsPresenceKind);
 
-    if (type?.IsPresenceKind) presentCount += 1;
+    if (isPresent) presentCount += 1;
     if (standardId === ABSENCE || standardId === ABSENCE_JUSTIFIED) absences += 1;
     if (standardId === ABSENCE_JUSTIFIED) absencesJustified += 1;
     if (standardId === LATE) lateArrivals += 1;
     if (standardId === EXEMPTION) exemptions += 1;
+    if (standardId === ABSENCE) unexcusedAbsences.push(adaptUnexcused(a));
 
-    if (standardId === ABSENCE) {
-      unexcusedAbsences.push(adaptUnexcused(a));
+    const subject = subjectByLessonId.get(String(a.Lesson.Id));
+    if (subject) {
+      const agg = bySubject.get(subject.Id) ?? {
+        name: subject.Name,
+        total: 0,
+        present: 0,
+        absences: 0,
+        absencesJustified: 0,
+        lateArrivals: 0,
+        exemptions: 0,
+      };
+      agg.total += 1;
+      if (isPresent) agg.present += 1;
+      if (standardId === ABSENCE || standardId === ABSENCE_JUSTIFIED) agg.absences += 1;
+      if (standardId === ABSENCE_JUSTIFIED) agg.absencesJustified += 1;
+      if (standardId === LATE) agg.lateArrivals += 1;
+      if (standardId === EXEMPTION) agg.exemptions += 1;
+      bySubject.set(subject.Id, agg);
     }
   }
 
   const total = attendances.length;
+  const periodId = attendances[0]?.Semester ?? 1;
+
   const monthStats: PresenceMonthStats[] =
     total === 0
       ? []
       : [
           {
-            PeriodId: attendances[0]?.Semester ?? 1,
+            PeriodId: periodId,
             Month: 0,
             PresencePercentage: Math.round((presentCount / total) * 10000) / 100,
             Absences: absences,
@@ -80,7 +132,22 @@ export async function getAttendanceAdapted(accessToken: string): Promise<LibrusA
           },
         ];
 
-  return { monthStats, subjectStats: [], unexcusedAbsences };
+  const subjectStats: PresenceSubjectStats[] = [...bySubject.entries()]
+    .map(([subjectId, agg]) => ({
+      PeriodId: periodId,
+      SubjectId: subjectId,
+      SubjectName: agg.name,
+      PresencePercentage: agg.total ? Math.round((agg.present / agg.total) * 10000) / 100 : 0,
+      Absences: agg.absences,
+      AbsencesJustified: agg.absencesJustified,
+      LateArrivals: agg.lateArrivals,
+      LateArrivalsJustified: 0,
+      Exemptions: agg.exemptions,
+      AbsencesDueToSchool: 0,
+    }))
+    .sort((a, b) => a.SubjectName.localeCompare(b.SubjectName));
+
+  return { monthStats, subjectStats, unexcusedAbsences };
 }
 
 function adaptUnexcused(a: LibrusAttendance): Lesson {
