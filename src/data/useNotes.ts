@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { getNotes } from '../api/hebe/endpoints/notes';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
+import { useLibrusNotes } from './useLibrusNotes';
 
-export function useNotes() {
+function useVulcanNotes() {
   const activeInfo = useActiveCredential();
   const enabled = Boolean(activeInfo);
 
@@ -20,4 +21,12 @@ export function useNotes() {
     refetch: query.refetch,
     hasActiveStudent: enabled,
   };
+}
+
+export function useNotes() {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanNotes();
+  const librusResult = useLibrusNotes();
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

@@ -39,6 +39,13 @@ export interface LibrusGrade {
 export interface LibrusSubject {
   Id: number;
   Name: string;
+  Short?: string;
+  IsExtracurricular?: boolean;
+}
+
+export interface LibrusHomeworkCategory {
+  Id: number;
+  Name: string;
 }
 
 export interface LibrusGradeCategory {
@@ -127,6 +134,40 @@ export interface LibrusLesson {
   Teacher: ApiRef;
   Subject: ApiRef;
   Class: ApiRef;
+}
+
+/**
+ * Field names confirmed from WebMasterPL/librus-PP (a sibling personal
+ * unofficial Librus iOS client, same category as this project - real,
+ * production-tested `RawNote` decoder), not this project's own live testing:
+ * this account had zero notes recorded to verify against directly.
+ * `Positive` is a 3-way value (0 negatywna, 1 pozytywna, 2 neutralna), unlike
+ * Vulcan's plain boolean - see the adapter for how that's collapsed.
+ */
+export interface LibrusNote {
+  Id: number;
+  Text: string;
+  Category?: ApiRef;
+  Teacher?: ApiRef;
+  Date: string;
+  Positive: number;
+}
+
+export interface LibrusNoteCategory {
+  Id: number;
+  CategoryName: string;
+}
+
+/** Confirmed live - `Subject` here means the notice's title/topic, not a school subject. */
+export interface LibrusAnnouncement {
+  Id: string;
+  StartDate: string;
+  EndDate: string;
+  Subject: string;
+  Content: string;
+  AddedBy?: ApiRef;
+  CreationDate: string;
+  WasRead: boolean;
 }
 
 /** wiadomosci.librus.pl list item - `content` is base64, truncated to a preview (full text needs the detail call). */

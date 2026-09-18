@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAnnouncements } from '../api/hebe/endpoints/announcements';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
+import { useLibrusAnnouncements } from './useLibrusAnnouncements';
 
-export function useAnnouncements() {
+function useVulcanAnnouncements() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const unitId = student?.Unit.Id;
@@ -22,4 +23,12 @@ export function useAnnouncements() {
     refetch: query.refetch,
     hasActiveStudent: enabled,
   };
+}
+
+export function useAnnouncements() {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanAnnouncements();
+  const librusResult = useLibrusAnnouncements();
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

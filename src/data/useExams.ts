@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { getExams } from '../api/hebe/endpoints/exams';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
 import { formatDateForApi } from '../utils/dates';
+import { useLibrusExams } from './useLibrusExams';
 
-export function useExams() {
+function useVulcanExams() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const periods = student?.Periods ?? [];
@@ -25,4 +26,12 @@ export function useExams() {
     refetch: query.refetch,
     hasActiveStudent: enabled,
   };
+}
+
+export function useExams() {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanExams();
+  const librusResult = useLibrusExams();
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }

@@ -1,32 +1,25 @@
 import { EMPTY_EMPLOYEE, isExamCategoryName, loadHomeworkContext } from './homeworkShared';
-import type { Homework } from '../../hebe/types/homework';
+import type { Exam } from '../../hebe/types/exam';
 
-/**
- * Homework's Subject/CreatedBy are bare {Id,Url} refs (no inline name, unlike
- * Timetable's Subject/Teacher) - resolved via /Subjects and one /Users/{id}
- * call per distinct teacher (see loadHomeworkContext). Entries whose category
- * reads as a test/quiz are excluded here - they show up in Exams instead
- * (see ./exams.ts) - otherwise every kartkówka would double as "homework".
- */
-export async function getHomeworkAdapted(accessToken: string): Promise<Homework[]> {
+/** The exam-flagged half of Librus's /HomeWorks feed - see ./homework.ts and ./homeworkShared.ts for why the split exists. */
+export async function getExamsAdapted(accessToken: string): Promise<Exam[]> {
   const { homeworks, subjectById, categoryById, teacherById } = await loadHomeworkContext(accessToken);
 
   return homeworks
-    .filter((h) => !isExamCategoryName(categoryById.get(String(h.Category.Id))?.Name))
-    .map((h): Homework => {
+    .filter((h) => isExamCategoryName(categoryById.get(String(h.Category.Id))?.Name))
+    .map((h): Exam => {
       const subject = subjectById.get(String(h.Subject.Id));
+      const category = categoryById.get(String(h.Category.Id));
       const teacher = teacherById.get(String(h.CreatedBy.Id));
 
       return {
         Id: h.Id,
         Key: String(h.Id),
-        IdPupil: 0,
-        IdHomework: h.Id,
+        Type: category?.Name ?? 'Sprawdzian',
+        TypeId: Number(h.Category.Id),
         Content: h.Content,
-        IsAnswerRequired: false,
         CreatedAt: h.AddDate,
         ModifiedAt: h.AddDate,
-        DateAt: h.Date,
         DeadlineAt: h.Date,
         Creator: teacher
           ? { Id: teacher.Id, Surname: teacher.LastName, Name: teacher.FirstName, DisplayName: `${teacher.FirstName} ${teacher.LastName}` }
@@ -38,7 +31,7 @@ export async function getHomeworkAdapted(accessToken: string): Promise<Homework[
           Kod: '',
           Position: 0,
         },
-        Attachments: [],
+        PupilId: 0,
       };
     });
 }

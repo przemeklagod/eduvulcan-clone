@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { getTeachers } from '../api/hebe/endpoints/teachers';
-import { useActiveCredential } from '../auth/accountsContext';
+import { useAccounts, useActiveCredential } from '../auth/accountsContext';
+import { useLibrusTeachers } from './useLibrusTeachers';
 
 function findCurrentPeriodId(periods: Array<{ Id: number; Current: boolean }> | null | undefined): number | undefined {
   return periods?.find((p) => p.Current)?.Id ?? periods?.[0]?.Id;
 }
 
-export function useTeachers() {
+function useVulcanTeachers() {
   const activeInfo = useActiveCredential();
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const periodId = findCurrentPeriodId(student?.Periods);
@@ -26,4 +27,12 @@ export function useTeachers() {
     refetch: query.refetch,
     hasActiveStudent: enabled,
   };
+}
+
+export function useTeachers() {
+  const { active } = useAccounts();
+  const vulcanResult = useVulcanTeachers();
+  const librusResult = useLibrusTeachers();
+
+  return active?.provider === 'librus' ? librusResult : vulcanResult;
 }
