@@ -170,24 +170,28 @@ export interface LibrusAnnouncement {
   WasRead: boolean;
 }
 
-/** wiadomosci.librus.pl list item - `content` is base64, truncated to a preview (full text needs the detail call). */
-export interface LibrusWiadomosciListItem {
-  messageId: string;
-  senderName: string;
-  topic: string;
-  content: string;
-  sendDate: string;
-  readDate: string | null;
-  isAnyFileAttached: boolean;
+export interface LibrusMessageReadDate {
+  ReceiverId: string;
+  ReadDate: number;
 }
 
-/** wiadomosci.librus.pl message detail - `Message` (capital M) is the full base64 body, unlike the list's truncated `content`. */
-export interface LibrusWiadomosciDetail {
-  messageId: string;
-  senderId: string;
-  senderName: string;
-  topic: string;
-  Message: string;
-  sendDate: string;
-  readDate: string | null;
+/**
+ * Confirmed live on api.librus.pl/3.0 directly (no separate
+ * wiadomosci.librus.pl session needed, unlike an earlier version of this
+ * integration assumed) - `?getAllTypes=1` returns every folder in one call,
+ * distinguished by the `in*` flags below. `Subject`/`Body` come back
+ * double-JSON-encoded (the raw string itself is a quoted, escaped JSON
+ * string literal) - see decodeDoubleEncoded in the adapter.
+ */
+export interface LibrusMessage {
+  Id: string;
+  Sender: ApiRef;
+  Receiver: ApiRef[];
+  SendDate: number;
+  ReadDates: LibrusMessageReadDate[];
+  Subject: string;
+  Body: string;
+  inReceived: boolean;
+  inSended: boolean;
+  inTrash: boolean;
 }

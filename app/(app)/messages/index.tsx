@@ -21,10 +21,10 @@ export default function MessagesScreen() {
   const student = activeInfo?.students.find((s) => s.Pupil.Id === activeInfo.pupilId);
   const myBoxKey = student?.MessageBox?.GlobalKey;
   const myBoxName = student?.MessageBox?.Name;
-  // Librus only exposes an inbox via the wiadomosci.librus.pl bridge - no
-  // sent/deleted folders and no sending, unlike Vulcan's full message API.
+  // Librus has all three folders (unlike an earlier version of this
+  // integration assumed), but no way to send/reply - no write endpoint
+  // exists on the Librus message API at all.
   const isLibrus = active?.provider === 'librus';
-  const folders = isLibrus ? FOLDERS.filter((f) => f.key === 'received') : FOLDERS;
 
   const [folder, setFolder] = useState<MessageFolder>('received');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export default function MessagesScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <View style={styles.tabBar}>
-          {folders.map((f) => (
+          {FOLDERS.map((f) => (
             <Pressable key={f.key} style={[styles.tab, folder === f.key && { borderBottomWidth: 2, borderBottomColor: colors.accent }]} onPress={() => setFolder(f.key)}>
               <Text style={[styles.tabLabel, { color: folder === f.key ? colors.accent : colors.secondaryText }, folder === f.key && styles.tabLabelActive]}>
                 {f.label}

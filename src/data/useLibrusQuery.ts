@@ -1,9 +1,8 @@
 import { LibrusApiError } from '../api/librus/client';
-import { LibrusWiadomosciError } from '../api/librus/wiadomosci';
 import { useAccounts, useActiveLibrusChild } from '../auth/accountsContext';
 
 function isUnauthorized(e: unknown): boolean {
-  return (e instanceof LibrusApiError || e instanceof LibrusWiadomosciError) && e.status === 401;
+  return e instanceof LibrusApiError && e.status === 401;
 }
 
 /**
