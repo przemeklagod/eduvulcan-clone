@@ -76,8 +76,22 @@ export interface StoredLibrusAccount {
   children: LibrusChildAccount[];
 }
 
+/**
+ * SecureStore keys are restricted to alphanumerics plus '.', '-', '_' - an
+ * email's '@' (and any other punctuation) makes setItemAsync throw "Invalid
+ * key provided to SecureStore". Base64url-encoding keeps this reversible and
+ * collision-free without needing to track a separate id.
+ */
+function sanitizeForKey(value: string): string {
+  return Buffer.from(value, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
 function librusAccountKey(portalEmail: string): string {
-  return `librus_account_${portalEmail}`;
+  return `librus_account_${sanitizeForKey(portalEmail)}`;
 }
 
 export async function listLibrusAccountEmails(): Promise<string[]> {
