@@ -16,9 +16,25 @@ export class LibrusApiError extends Error {
   }
 }
 
+/**
+ * Redacted-but-comparable summary of the token actually used for a failed
+ * request - not the full secret, but enough (length + edges) to tell
+ * whether the app is holding the same token a fresh login would produce, or
+ * something truncated/stale/different. Temporary diagnostic aid for a 400
+ * "Invalid request params" that only ever reproduces on-device.
+ */
+function describeToken(accessToken: string): string {
+  const len = accessToken.length;
+  const head = accessToken.slice(0, 8);
+  const tail = accessToken.slice(-8);
+  const hasHash = accessToken.includes('#');
+  return `len=${len} head="${head}" tail="${tail}" hasHash=${hasHash}`;
+}
+
 /** Simple bearer-token GET against api.librus.pl/3.0 - no request signing, unlike Vulcan's Hebe. */
 export async function librusGet<T>(accessToken: string, path: string): Promise<T> {
-  const response = await fetch(`${SYNERGIA_BASE_URL}${path}`, {
+  const url = `${SYNERGIA_BASE_URL}${path}`;
+  const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'User-Agent': MOBILE_UA },
     cache: 'no-store',
   });
@@ -28,7 +44,7 @@ export async function librusGet<T>(accessToken: string, path: string): Promise<T
     throw new LibrusApiError(
       path,
       response.status,
-      `Zapytanie Librus ${path} nie powiodło się (HTTP ${response.status})${body ? `: ${body.slice(0, 300)}` : ''}`
+      `Zapytanie Librus ${path} nie powiodło się (HTTP ${response.status})${body ? `: ${body.slice(0, 300)}` : ''}\n[diag] url=${url} token(${describeToken(accessToken)})`
     );
   }
 
