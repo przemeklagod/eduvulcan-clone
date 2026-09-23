@@ -13,7 +13,7 @@ export class LibrusAuthError extends Error {}
  */
 export async function loginToLibrusPortal(email: string, password: string): Promise<void> {
   const loginPageUrl = `${PORTAL_BASE_URL}/konto-librus/login`;
-  const loginPageResponse = await fetch(loginPageUrl, { credentials: 'include', cache: 'no-store' });
+  const loginPageResponse = await fetch(loginPageUrl, { credentials: 'include' });
   if (!loginPageResponse.ok) throw new LibrusAuthError(`Nie udało się otworzyć strony logowania Librus (HTTP ${loginPageResponse.status})`);
 
   const loginPageHtml = await loginPageResponse.text();
@@ -27,7 +27,6 @@ export async function loginToLibrusPortal(email: string, password: string): Prom
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: loginPageUrl },
     body,
     credentials: 'include',
-    cache: 'no-store',
   });
   if (!loginActionResponse.ok) throw new LibrusAuthError('Logowanie do Librusa nie powiodło się - sprawdź e-mail i hasło.');
 }
@@ -36,7 +35,6 @@ async function getPortalJson<T>(path: string): Promise<T> {
   const response = await fetch(`${PORTAL_BASE_URL}/api/v3${path}`, {
     headers: { Accept: 'application/json' },
     credentials: 'include',
-    cache: 'no-store',
   });
   if (!response.ok) throw new LibrusAuthError(`Zapytanie do portalu Librus nie powiodło się (HTTP ${response.status}, ${path})`);
   return response.json() as Promise<T>;

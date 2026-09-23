@@ -17,26 +17,19 @@ export class LibrusApiError extends Error {
 }
 
 /**
- * Redacted-but-comparable summary of the token actually used for a failed
- * request - not the full secret, but enough (length + edges) to tell
- * whether the app is holding the same token a fresh login would produce, or
- * something truncated/stale/different. Temporary diagnostic aid for a 400
- * "Invalid request params" that only ever reproduces on-device.
+ * Simple bearer-token GET against api.librus.pl/3.0 - no request signing,
+ * unlike Vulcan's Hebe. Deliberately doesn't pass `cache: 'no-store'`:
+ * confirmed live that React Native's fetch appends a `?_=<timestamp>`
+ * cache-busting query param when that option is set (the same trick
+ * jQuery.ajax used to do, since XHR has no native no-store concept), and
+ * Librus's API rejects any request carrying an unrecognized query param
+ * with a generic 400 "InvalidRequest" - reproduced 1:1 against a real
+ * account. Vulcan's hebeGet never set this option, which is why it was
+ * never affected.
  */
-function describeToken(accessToken: string): string {
-  const len = accessToken.length;
-  const head = accessToken.slice(0, 8);
-  const tail = accessToken.slice(-8);
-  const hasHash = accessToken.includes('#');
-  return `len=${len} head="${head}" tail="${tail}" hasHash=${hasHash}`;
-}
-
-/** Simple bearer-token GET against api.librus.pl/3.0 - no request signing, unlike Vulcan's Hebe. */
 export async function librusGet<T>(accessToken: string, path: string): Promise<T> {
-  const url = `${SYNERGIA_BASE_URL}${path}`;
-  const response = await fetch(url, {
+  const response = await fetch(`${SYNERGIA_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'User-Agent': MOBILE_UA },
-    cache: 'no-store',
   });
 
   if (!response.ok) {
@@ -44,7 +37,7 @@ export async function librusGet<T>(accessToken: string, path: string): Promise<T
     throw new LibrusApiError(
       path,
       response.status,
-      `Zapytanie Librus ${path} nie powiodło się (HTTP ${response.status})${body ? `: ${body.slice(0, 300)}` : ''}\n[diag] url=${url} token(${describeToken(accessToken)})`
+      `Zapytanie Librus ${path} nie powiodło się (HTTP ${response.status})${body ? `: ${body.slice(0, 300)}` : ''}`
     );
   }
 
