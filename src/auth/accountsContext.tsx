@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { loginToEduVulcan } from '../api/eduvulcan/login';
 import { registerTenant, refreshStudents } from '../api/hebe/register';
 import { getSynergiaAccounts, loginToLibrusPortal } from '../api/librus/auth';
+import { refreshLibrusTokenFor } from '../api/librus/tokenRefresh';
 import type { LibrusChildAccount } from '../api/librus/types';
 import {
   getHiddenChildren,
@@ -155,16 +156,11 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
 
   const refreshLibrusToken = useCallback(
     async (portalEmail: string): Promise<LibrusChildAccount[]> => {
-      const account = librusAccounts.find((a) => a.portalEmail === portalEmail);
-      if (!account) throw new Error(`Nie znaleziono zapisanego konta Librus dla ${portalEmail}`);
-
-      await loginToLibrusPortal(portalEmail, account.portalPassword);
-      const { accounts } = await getSynergiaAccounts();
-      await saveLibrusAccount(portalEmail, account.portalPassword, accounts);
+      const accounts = await refreshLibrusTokenFor(portalEmail);
       await refresh();
       return accounts;
     },
-    [librusAccounts, refresh]
+    [refresh]
   );
 
   const setChildHiddenAndRefresh = useCallback(

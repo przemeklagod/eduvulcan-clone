@@ -10,6 +10,22 @@ export function formatHebeDate(value: string): string {
   return `${day}.${month}.${year}`;
 }
 
+const WEEKDAY_NAMES = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'];
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** e.g. "Poniedziałek, 13.01.2026" - parses the date's own y/m/d components (not `new Date(string)`) to avoid a UTC-parse day-shift near midnight. */
+export function formatHebeDateWithWeekday(value: string): string {
+  const datePart = value.split(/[ T]/)[0];
+  const [year, month, day] = datePart.split('-').map(Number);
+  if (!year || !month || !day) return formatHebeDate(value);
+
+  const weekday = WEEKDAY_NAMES[new Date(year, month - 1, day).getDay()];
+  return `${capitalize(weekday)}, ${formatHebeDate(value)}`;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }

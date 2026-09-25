@@ -4,7 +4,7 @@ import type { ScheduleExtra } from '@/src/api/hebe/types/schedule';
 import { useScheduleExtra } from '@/src/data/useScheduleExtra';
 import { useThemeColors } from '@/src/ui/theme';
 import { useWeekNavigation, WeekHeader } from '@/src/ui/weekNavigation';
-import { formatHebeDate } from '@/src/utils/dates';
+import { formatHebeDateWithWeekday } from '@/src/utils/dates';
 
 interface DaySection {
   date: string;
@@ -64,7 +64,7 @@ export default function ScheduleExtraScreen() {
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
           renderSectionHeader={({ section }) => (
             <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
-              <Text style={[styles.dayName, { color: colors.text }]}>{formatHebeDate(section.date)}</Text>
+              <Text style={[styles.dayName, { color: colors.text }]}>{formatHebeDateWithWeekday(section.date)}</Text>
             </View>
           )}
           renderItem={({ item }) => (
